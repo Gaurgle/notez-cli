@@ -1,5 +1,9 @@
 # notez
 
+![License](https://img.shields.io/github/license/Gaurgle/notez-cli)
+![Rust](https://img.shields.io/badge/rust-stable-dea584)
+![Optional](https://img.shields.io/badge/optional-yazi%20·%20fzf%20·%20rg-blue)
+
 A local-first CLI note-taking tool. Notes live with your projects, mirrored to a home directory for a unified view.
 
 ## Install
