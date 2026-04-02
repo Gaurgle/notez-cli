@@ -65,7 +65,7 @@ pub fn run_setup() {
         .unwrap_or_else(|| {
             dirs::home_dir()
                 .unwrap()
-                .join("notes")
+                .join("notez")
                 .to_string_lossy()
                 .to_string()
         });
@@ -125,24 +125,38 @@ pub fn run_setup() {
             2 => {
                 step_header(&colors, step, total, "Where to keep your notes");
 
-                println!("    Choose a folder where all your notes will live.");
-                println!("    notez will create its folders inside this location.");
+                let display_root = default_root.replacen(
+                    &dirs::home_dir().unwrap().to_string_lossy().to_string(),
+                    "~",
+                    1,
+                );
+
+                println!("    Your notes will be stored at:");
                 println!();
                 println!(
-                    "    {}  {}",
-                    colors.overlay.apply_to("examples:"),
-                    colors.sapphire.apply_to("~/notes  ~/Documents/notes  ~/notez")
+                    "      {}",
+                    colors.sapphire.apply_to(&display_root)
                 );
                 println!();
 
-                let input = prompt_input(&colors, &mut rl, "Folder path", &default_root);
+                let change = Confirm::new()
+                    .with_prompt("    Use this location?")
+                    .default(true)
+                    .interact()
+                    .unwrap();
 
-                if input == "b" {
-                    step = 1;
-                    continue;
+                if !change {
+                    println!();
+                    let input = prompt_input(&colors, &mut rl, "Folder path", &default_root);
+
+                    if input == "b" {
+                        step = 1;
+                        continue;
+                    }
+                    root_dir = expand_tilde(&input);
+                } else {
+                    root_dir = expand_tilde(&default_root);
                 }
-
-                root_dir = expand_tilde(&input);
                 let root_path = PathBuf::from(&root_dir);
 
                 if !root_path.exists() {
