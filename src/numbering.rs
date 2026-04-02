@@ -79,6 +79,7 @@ pub fn fuzzy_match_dir(root: &Path, query: &str) -> Option<NumberedDir> {
 }
 
 /// Counts immediate files (not directories) in `path`.
+#[allow(dead_code)]
 pub fn count_files(path: &Path) -> usize {
     fs::read_dir(path)
         .map(|entries| entries.flatten().filter(|e| e.path().is_file()).count())

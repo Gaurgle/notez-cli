@@ -4,6 +4,7 @@ use console::Style;
 ///
 /// The `console` crate only supports `Color256(u8)`, not true 24-bit RGB,
 /// so these are the closest xterm-256 approximations of each Mocha hex value.
+#[allow(dead_code)]
 pub struct Colors {
     /// #fab387 — warnings
     pub peach: Style,
@@ -25,6 +26,7 @@ pub struct Colors {
     pub bold: Style,
 }
 
+#[allow(dead_code)]
 impl Colors {
     pub fn new() -> Self {
         Self {
