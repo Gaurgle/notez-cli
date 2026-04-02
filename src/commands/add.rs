@@ -8,7 +8,7 @@ use crate::colors::Colors;
 use crate::config::Config;
 use crate::numbering;
 
-pub fn run_add(title: Option<String>, target: Option<String>) {
+pub fn run_add(title: Option<String>, target: Option<String>, body: Option<String>) {
     let config = Config::require();
     let date = Local::now().format("%Y-%m-%d").to_string();
     let raw_title = title.unwrap_or_else(|| "untitled".into());
@@ -28,7 +28,7 @@ pub fn run_add(title: Option<String>, target: Option<String>) {
         }
     };
 
-    let file_path = create_note_file(&target_dir, &date, &clean_title);
+    let file_path = create_note_file(&target_dir, &date, &clean_title, body.as_deref());
     let colors = Colors::new();
     println!(
         "  {} created {}",
@@ -45,10 +45,13 @@ pub fn run_add(title: Option<String>, target: Option<String>) {
         .expect("failed to launch editor");
 }
 
-fn create_note_file(dir: &Path, date: &str, title: &str) -> PathBuf {
+fn create_note_file(dir: &Path, date: &str, title: &str, body: Option<&str>) -> PathBuf {
     fs::create_dir_all(dir).expect("failed to create target directory");
     let file_path = dir.join(format!("{}-{}.md", date, title));
-    let content = format!("# {}\n\nDate: {}\n\n", title, date);
+    let content = match body {
+        Some(text) => format!("# {}\n\nDate: {}\n\n{}\n", title, date, text),
+        None => format!("# {}\n\nDate: {}\n\n", title, date),
+    };
     fs::write(&file_path, content).expect("failed to write note file");
     file_path
 }
@@ -149,7 +152,7 @@ mod tests {
     #[test]
     fn creates_note_with_title() {
         let dir = tempfile::tempdir().unwrap();
-        let path = create_note_file(dir.path(), "2026-04-02", "my-idea");
+        let path = create_note_file(dir.path(), "2026-04-02", "my-idea", None);
 
         assert!(path.exists());
         let content = fs::read_to_string(&path).unwrap();
@@ -161,8 +164,17 @@ mod tests {
     #[test]
     fn creates_note_with_default_title() {
         let dir = tempfile::tempdir().unwrap();
-        let path = create_note_file(dir.path(), "2026-04-02", "untitled");
+        let path = create_note_file(dir.path(), "2026-04-02", "untitled", None);
         assert_eq!(path.file_name().unwrap().to_str().unwrap(), "2026-04-02-untitled.md");
+    }
+
+    #[test]
+    fn creates_note_with_body() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = create_note_file(dir.path(), "2026-04-02", "my-idea", Some("This is the note content"));
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("This is the note content"));
     }
 
     #[test]

@@ -63,14 +63,43 @@ enum Commands {
     },
 }
 
+/// Split args into title words and optional body.
+/// Shell quotes mean args with spaces were quoted by the user.
+/// e.g., `notez add my idea "this is the note"` → args: ["my", "idea", "this is the note"]
+/// Words without spaces = title, last arg with spaces = body.
+fn split_title_body(args: Vec<String>) -> (Option<String>, Option<String>) {
+    if args.is_empty() {
+        return (None, None);
+    }
+
+    let mut title_parts = Vec::new();
+    let mut body = None;
+
+    for arg in &args {
+        if arg.contains(' ') {
+            body = Some(arg.clone());
+        } else {
+            title_parts.push(arg.clone());
+        }
+    }
+
+    let title = if title_parts.is_empty() {
+        None
+    } else {
+        Some(title_parts.join(" "))
+    };
+
+    (title, body)
+}
+
 fn main() {
     let cli = Cli::parse();
 
     match cli.command {
         None => commands::browse::run_browse(),
         Some(Commands::Add { title, r#in }) => {
-            let t = if title.is_empty() { None } else { Some(title.join(" ")) };
-            commands::add::run_add(t, r#in)
+            let (t, body) = split_title_body(title);
+            commands::add::run_add(t, r#in, body)
         }
         Some(Commands::Log { message }) => commands::log::run_log(message),
         Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(),
@@ -81,8 +110,8 @@ fn main() {
         Some(Commands::Zlog { message }) => commands::log::run_log(message),
         Some(Commands::Zlogs) => commands::browse::run_logz(),
         Some(Commands::Znote { title, r#in }) => {
-            let t = if title.is_empty() { None } else { Some(title.join(" ")) };
-            commands::add::run_add(t, r#in)
+            let (t, body) = split_title_body(title);
+            commands::add::run_add(t, r#in, body)
         }
     }
 }
