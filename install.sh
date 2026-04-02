@@ -43,5 +43,10 @@ if ! echo "$PATH" | tr ':' '\n' | grep -q "^$INSTALL_DIR$"; then
 fi
 
 echo ""
+echo "  To enable tab completions (zsh):"
+echo "    mkdir -p ~/.zfunc"
+echo "    notez completions zsh > ~/.zfunc/_notez"
+echo "    # Add to .zshrc: fpath=(~/.zfunc \$fpath)"
+echo ""
 echo "  Run ${BOLD}notez setup${RESET} to get started."
 echo ""
