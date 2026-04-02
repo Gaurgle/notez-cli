@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use dialoguer::{Confirm, Input, MultiSelect, Select};
+use dialoguer::{Confirm, Input, Select};
 
 use crate::colors::Colors;
 use crate::config::{Config, detect_tool, expand_tilde};
@@ -66,20 +66,26 @@ pub fn run_setup() {
                     "  {} Welcome! Let's configure your notes.",
                     colors.mauve.apply_to(format!("[{}/{}]", step, total))
                 );
+                println!();
                 println!(
-                    "  {} Type 'b' at any prompt to go back.\n",
+                    "  {} Press Enter to accept defaults, or type a new value.",
                     colors.overlay.apply_to("tip:")
+                );
+                println!(
+                    "  {} Type 'b' to go back a step.\n",
+                    colors.overlay.apply_to("    ")
                 );
                 step = 2;
             }
 
             // Step 2: Root directory
             2 => {
+                println!(
+                    "  {} Where should notez store your notes?",
+                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
+                );
                 let input: String = Input::new()
-                    .with_prompt(format!(
-                        "  {} Notes root directory",
-                        colors.mauve.apply_to(format!("[{}/{}]", step, total))
-                    ))
+                    .with_prompt("  Root directory")
                     .default(default_root.clone())
                     .interact_text()
                     .unwrap();
@@ -165,11 +171,12 @@ pub fn run_setup() {
 
             // Step 4: Quick notes dir name
             4 => {
+                println!(
+                    "  {} Name for your quick notes folder (will become 00_<name>)",
+                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
+                );
                 let input: String = Input::new()
-                    .with_prompt(format!(
-                        "  {} Quick notes directory name (auto-prefixed 00_)",
-                        colors.mauve.apply_to(format!("[{}/{}]", step, total))
-                    ))
+                    .with_prompt("  Quick notes name")
                     .default(default_quick.clone())
                     .interact_text()
                     .unwrap();
@@ -185,11 +192,12 @@ pub fn run_setup() {
 
             // Step 5: Daily logs dir name
             5 => {
+                println!(
+                    "  {} Name for your daily logs folder (will become 01_<name>)",
+                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
+                );
                 let input: String = Input::new()
-                    .with_prompt(format!(
-                        "  {} Daily logs directory name (auto-prefixed 01_)",
-                        colors.mauve.apply_to(format!("[{}/{}]", step, total))
-                    ))
+                    .with_prompt("  Daily logs name")
                     .default(default_daily.clone())
                     .interact_text()
                     .unwrap();
@@ -306,7 +314,7 @@ pub fn run_setup() {
 
 fn offer_aliases(colors: &Colors) {
     println!(
-        "  {} Optional shell aliases (add to your .zshrc):\n",
+        "  {} Optional shell aliases for quick access:\n",
         colors.mauve.apply_to("aliases")
     );
 
@@ -317,25 +325,33 @@ fn offer_aliases(colors: &Colors) {
         ("znote", "notez add", "Quick new note"),
     ];
 
-    let display: Vec<String> = aliases
-        .iter()
-        .map(|(alias, target, desc)| format!("{:<8} → {:<14} # {}", alias, target, desc))
-        .collect();
+    let mut selected = Vec::new();
 
-    let selections = MultiSelect::new()
-        .with_prompt("  Select aliases to install")
-        .items(&display)
-        .interact()
-        .unwrap();
+    for (alias, target, desc) in &aliases {
+        let label = format!(
+            "  {} {} → {}",
+            colors.sapphire.apply_to(format!("{:<8}", alias)),
+            colors.overlay.apply_to("→"),
+            colors.overlay.apply_to(format!("{:<14} {}", target, desc))
+        );
+        println!("{}", label);
+        let add = Confirm::new()
+            .with_prompt(format!("  Add {}?", alias))
+            .default(true)
+            .interact()
+            .unwrap();
+        if add {
+            selected.push((*alias, *target));
+        }
+    }
 
-    if selections.is_empty() {
+    if selected.is_empty() {
         println!("\n  {} No aliases selected.\n", colors.overlay.apply_to("─"));
         return;
     }
 
     println!("\n  Add these lines to your shell config:\n");
-    for i in selections {
-        let (alias, target, _) = &aliases[i];
+    for (alias, target) in &selected {
         println!(
             "    {}",
             colors.green.apply_to(format!("alias {}='{}'", alias, target))
