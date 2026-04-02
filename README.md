@@ -78,8 +78,16 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | Command | Description |
 |---|---|
 | `notez` | Browse local notes in yazi |
-| `notez search <term>` | Search notes with rg + fzf |
-| `notez tree` | Show directory structure with note counts |
+| `notez tree` | Interactive tree navigator (vim keys, Enter to open) |
+| `notez edit [term]` | Open an existing note (fuzzy search / fzf picker) |
+| `notez search <term>` | Search note content with rg + fzf |
+
+### Todos
+
+| Command | Description |
+|---|---|
+| `notez todo` | Interactive todo manager (vim keys, space/x to toggle) |
+| `notez todo "item"` | Quick-add a todo item |
 
 ### Organization
 
