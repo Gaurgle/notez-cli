@@ -81,11 +81,11 @@ pub fn run_setup() {
             // Step 2: Root directory
             2 => {
                 println!(
-                    "  {} Where should notez store your notes?",
+                    "  {} All your notes and notez directories will live here.",
                     colors.mauve.apply_to(format!("[{}/{}]", step, total))
                 );
                 let input: String = Input::new()
-                    .with_prompt("  Root directory")
+                    .with_prompt("  Notes root folder")
                     .default(default_root.clone())
                     .interact_text()
                     .unwrap();
@@ -346,7 +346,7 @@ fn offer_aliases(colors: &Colors) {
     }
 
     if selected.is_empty() {
-        println!("\n  {} No aliases selected.\n", colors.overlay.apply_to("─"));
+        println!("\n  {} No aliases selected.\n\n", colors.overlay.apply_to("─"));
         return;
     }
 
@@ -357,5 +357,6 @@ fn offer_aliases(colors: &Colors) {
             colors.green.apply_to(format!("alias {}='{}'", alias, target))
         );
     }
+    println!();
     println!();
 }
