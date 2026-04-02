@@ -81,11 +81,19 @@ pub fn run_setup() {
             // Step 2: Root directory
             2 => {
                 println!(
-                    "  {} All your notes and notez directories will live here.",
+                    "  {} Pick a folder for all your notes.",
                     colors.mauve.apply_to(format!("[{}/{}]", step, total))
                 );
+                println!(
+                    "  {} Enter a full path (e.g. ~/notes, ~/Documents/notes).",
+                    colors.overlay.apply_to("   ")
+                );
+                println!(
+                    "  {} This is where notez will create its numbered directories.\n",
+                    colors.overlay.apply_to("   ")
+                );
                 let input: String = Input::new()
-                    .with_prompt("  Notes root folder")
+                    .with_prompt("  Path")
                     .default(default_root.clone())
                     .interact_text()
                     .unwrap();
