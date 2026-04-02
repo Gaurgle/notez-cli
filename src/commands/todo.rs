@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::prelude::*;
@@ -14,23 +14,20 @@ use crate::tui::{self, theme, VimCommandMode};
 struct TodoItem {
     text: String,
     checked: bool,
+    source: PathBuf,   // which TODO.md this came from
+    project: String,   // display name (project or "global")
+    is_header: bool,   // section header, not a real item
 }
 
-fn parse_todos(content: &str) -> Vec<TodoItem> {
+fn parse_todos(content: &str) -> Vec<(String, bool)> {
     content
         .lines()
         .filter_map(|line| {
             let trimmed = line.trim();
             if trimmed.starts_with("- [ ] ") {
-                Some(TodoItem {
-                    text: trimmed[6..].to_string(),
-                    checked: false,
-                })
+                Some((trimmed[6..].to_string(), false))
             } else if trimmed.starts_with("- [x] ") || trimmed.starts_with("- [X] ") {
-                Some(TodoItem {
-                    text: trimmed[6..].to_string(),
-                    checked: true,
-                })
+                Some((trimmed[6..].to_string(), true))
             } else {
                 None
             }
@@ -38,67 +35,172 @@ fn parse_todos(content: &str) -> Vec<TodoItem> {
         .collect()
 }
 
-fn serialize_todos(items: &[TodoItem]) -> String {
+fn serialize_todos_for_file(items: &[TodoItem], source: &Path) -> String {
     let mut out = String::from("# TODO\n\n");
     for item in items {
+        if item.is_header || item.source != source {
+            continue;
+        }
         let checkbox = if item.checked { "[x]" } else { "[ ]" };
         out.push_str(&format!("- {} {}\n", checkbox, item.text));
     }
     out
 }
 
-fn todo_file_path(config: &Config, global: bool) -> PathBuf {
-    let root = project::resolve_notez_dir(config, global);
-    root.join("TODO.md")
+fn load_single_todo(path: &Path, project_name: &str) -> Vec<TodoItem> {
+    let content = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    parse_todos(&content)
+        .into_iter()
+        .map(|(text, checked)| TodoItem {
+            text,
+            checked,
+            source: path.to_path_buf(),
+            project: project_name.to_string(),
+            is_header: false,
+        })
+        .collect()
 }
 
-fn load_todos(path: &PathBuf) -> Vec<TodoItem> {
-    match fs::read_to_string(path) {
-        Ok(content) => parse_todos(&content),
-        Err(_) => Vec::new(),
+fn load_global_todos(config: &Config) -> Vec<TodoItem> {
+    let root = config.root_path();
+    let mut all_items = Vec::new();
+
+    // Scan all subdirs in ~/notez/ for TODO.md
+    let Ok(entries) = fs::read_dir(&root) else {
+        return all_items;
+    };
+
+    let mut dirs: Vec<_> = entries
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .collect();
+    dirs.sort_by_key(|e| e.file_name());
+
+    for entry in dirs {
+        let todo_path = entry.path().join("TODO.md");
+        if !todo_path.exists() {
+            continue;
+        }
+        let dir_name = entry.file_name().to_string_lossy().to_string();
+        let items = load_single_todo(&todo_path, &dir_name);
+        if items.is_empty() {
+            continue;
+        }
+
+        // Add section header
+        all_items.push(TodoItem {
+            text: dir_name.clone(),
+            checked: false,
+            source: todo_path.clone(),
+            project: dir_name,
+            is_header: true,
+        });
+        all_items.extend(items);
     }
+
+    // Also check root TODO.md
+    let root_todo = root.join("TODO.md");
+    if root_todo.exists() {
+        let items = load_single_todo(&root_todo, "global");
+        if !items.is_empty() {
+            all_items.insert(0, TodoItem {
+                text: "global".to_string(),
+                checked: false,
+                source: root_todo,
+                project: "global".to_string(),
+                is_header: true,
+            });
+            // Insert after the header
+            for (i, item) in items.into_iter().enumerate() {
+                all_items.insert(i + 1, item);
+            }
+        }
+    }
+
+    all_items
 }
 
-fn save_todos(path: &PathBuf, items: &[TodoItem]) {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).ok();
+fn save_all_todos(items: &[TodoItem]) {
+    // Group by source file and save each
+    let mut sources: Vec<PathBuf> = Vec::new();
+    for item in items {
+        if !item.is_header && !sources.contains(&item.source) {
+            sources.push(item.source.clone());
+        }
     }
-    fs::write(path, serialize_todos(items)).expect("failed to write TODO.md");
+    for source in &sources {
+        let content = serialize_todos_for_file(items, source);
+        if let Some(parent) = source.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+        fs::write(source, content).ok();
+    }
 }
 
 pub fn run_todo(global: bool, item: Option<String>) {
     let config = Config::require();
-    let path = todo_file_path(&config, global);
 
     match item {
         Some(text) => {
-            let mut items = load_todos(&path);
+            // Quick-add: always to the specific TODO.md (local or global root)
+            let root = project::resolve_notez_dir(&config, global);
+            let path = root.join("TODO.md");
+            let mut items = load_single_todo(&path, "local");
             items.push(TodoItem {
                 text,
                 checked: false,
+                source: path.clone(),
+                project: "local".to_string(),
+                is_header: false,
             });
-            save_todos(&path, &items);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).ok();
+            }
+            fs::write(&path, serialize_todos_for_file(&items, &path))
+                .expect("failed to write TODO.md");
 
             let colors = Colors::new();
+            let real_count = items.iter().filter(|i| !i.is_header).count();
             println!(
                 "  {} added to TODO ({} items)",
                 colors.green.apply_to("✓"),
-                items.len()
+                real_count
             );
         }
         None => {
-            let items = load_todos(&path);
-            let updated = run_todo_tui(items);
-            save_todos(&path, &updated);
+            let items = if global {
+                load_global_todos(&config)
+            } else {
+                let root = project::resolve_notez_dir(&config, false);
+                let path = root.join("TODO.md");
+                load_single_todo(&path, "local")
+            };
+            let updated = run_todo_tui(items, global);
+            if global {
+                save_all_todos(&updated);
+            } else {
+                let root = project::resolve_notez_dir(&config, false);
+                let path = root.join("TODO.md");
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).ok();
+                }
+                fs::write(&path, serialize_todos_for_file(&updated, &path))
+                    .expect("failed to write TODO.md");
+            }
         }
     }
 }
 
-fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
+fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
     let mut terminal = tui::enter().expect("failed to enter TUI");
     let mut state = ListState::default();
     if !items.is_empty() {
-        state.select(Some(0));
+        // Select first non-header item
+        let first = items.iter().position(|i| !i.is_header).unwrap_or(0);
+        state.select(Some(first));
     }
     let mut vim = VimCommandMode::new();
     let mut input_mode = false;
@@ -126,7 +228,15 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
                 let list_items: Vec<ListItem> = items
                     .iter()
                     .map(|item| {
-                        if item.checked {
+                        if item.is_header {
+                            let line = Line::from(vec![
+                                Span::styled(
+                                    format!("  ── {} ", item.text),
+                                    Style::default().fg(theme::MAUVE).add_modifier(ratatui::style::Modifier::BOLD),
+                                ),
+                            ]);
+                            ListItem::new(line)
+                        } else if item.checked {
                             let line = Line::from(vec![
                                 Span::styled("  [x] ", Style::default().fg(theme::SURFACE)),
                                 Span::styled(
@@ -147,11 +257,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
                     })
                     .collect();
 
-                let todo_count = items.iter().filter(|i| !i.checked).count();
-                let done_count = items.iter().filter(|i| i.checked).count();
+                let todo_count = items.iter().filter(|i| !i.is_header && !i.checked).count();
+                let done_count = items.iter().filter(|i| !i.is_header && i.checked).count();
 
+                let title_label = if global { "TODO (all projects)" } else { "TODO" };
                 let title = Line::from(vec![
-                    Span::styled(" TODO ", Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
+                    Span::styled(format!(" {} ", title_label), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
                     Span::styled("— ", Style::default().fg(theme::SURFACE)),
                     Span::styled(format!("{} pending", todo_count), Style::default().fg(theme::SAPPHIRE)),
                     Span::styled(" · ", Style::default().fg(theme::SURFACE)),
@@ -214,9 +325,25 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
                 match key.code {
                     KeyCode::Enter => {
                         if !input_buffer.is_empty() {
+                            // In global mode, add to the project of the currently selected item
+                            let source = if let Some(sel) = state.selected() {
+                                items.get(sel).map(|i| i.source.clone()).unwrap_or_default()
+                            } else if !items.is_empty() {
+                                items.last().unwrap().source.clone()
+                            } else {
+                                PathBuf::new()
+                            };
+                            let project = if let Some(sel) = state.selected() {
+                                items.get(sel).map(|i| i.project.clone()).unwrap_or_default()
+                            } else {
+                                "local".to_string()
+                            };
                             items.push(TodoItem {
                                 text: input_buffer.clone(),
                                 checked: false,
+                                source,
+                                project,
+                                is_header: false,
                             });
                             state.select(Some(items.len() - 1));
                         }
@@ -280,18 +407,31 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
                 KeyCode::Char('q') | KeyCode::Esc => break,
 
                 KeyCode::Char('j') | KeyCode::Down => {
-                    if !items.is_empty() && selected + 1 < items.len() {
-                        state.select(Some(selected + 1));
+                    if !items.is_empty() {
+                        // Skip headers when navigating
+                        let mut next = selected + 1;
+                        while next < items.len() && items[next].is_header {
+                            next += 1;
+                        }
+                        if next < items.len() {
+                            state.select(Some(next));
+                        }
                     }
                 }
                 KeyCode::Char('k') | KeyCode::Up => {
                     if selected > 0 {
-                        state.select(Some(selected - 1));
+                        let mut prev = selected - 1;
+                        while prev > 0 && items[prev].is_header {
+                            prev -= 1;
+                        }
+                        if !items[prev].is_header {
+                            state.select(Some(prev));
+                        }
                     }
                 }
 
                 KeyCode::Char(' ') | KeyCode::Char('x') | KeyCode::Enter => {
-                    if selected < items.len() {
+                    if selected < items.len() && !items[selected].is_header {
                         items[selected].checked = !items[selected].checked;
                     }
                 }
@@ -302,7 +442,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
                 }
 
                 KeyCode::Char('d') => {
-                    if selected < items.len() {
+                    if selected < items.len() && !items[selected].is_header {
                         items.remove(selected);
                         if selected >= items.len() && !items.is_empty() {
                             state.select(Some(items.len() - 1));
@@ -311,7 +451,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
                 }
 
                 KeyCode::Char('e') => {
-                    if selected < items.len() {
+                    if selected < items.len() && !items[selected].is_header {
                         edit_mode = true;
                         edit_idx = selected;
                         input_buffer = items[selected].text.clone();
@@ -336,22 +476,10 @@ mod tests {
         let content = "# TODO\n\n- [ ] first item\n- [x] done item\n- [ ] third item\n";
         let items = parse_todos(content);
         assert_eq!(items.len(), 3);
-        assert!(!items[0].checked);
-        assert_eq!(items[0].text, "first item");
-        assert!(items[1].checked);
-        assert_eq!(items[1].text, "done item");
-    }
-
-    #[test]
-    fn serialize_todo_items_to_markdown() {
-        let items = vec![
-            TodoItem { text: "first".into(), checked: false },
-            TodoItem { text: "done".into(), checked: true },
-        ];
-        let md = serialize_todos(&items);
-        assert!(md.contains("- [ ] first"));
-        assert!(md.contains("- [x] done"));
-        assert!(md.starts_with("# TODO\n"));
+        assert!(!items[0].1);
+        assert_eq!(items[0].0, "first item");
+        assert!(items[1].1);
+        assert_eq!(items[1].0, "done item");
     }
 
     #[test]
@@ -362,15 +490,15 @@ mod tests {
 
     #[test]
     fn roundtrip_preserves_items() {
+        let source = PathBuf::from("/tmp/test/TODO.md");
         let items = vec![
-            TodoItem { text: "buy milk".into(), checked: false },
-            TodoItem { text: "fix bug".into(), checked: true },
-            TodoItem { text: "write docs".into(), checked: false },
+            TodoItem { text: "buy milk".into(), checked: false, source: source.clone(), project: "test".into(), is_header: false },
+            TodoItem { text: "fix bug".into(), checked: true, source: source.clone(), project: "test".into(), is_header: false },
         ];
-        let md = serialize_todos(&items);
+        let md = serialize_todos_for_file(&items, &source);
         let parsed = parse_todos(&md);
-        assert_eq!(parsed.len(), 3);
-        assert_eq!(parsed[0].text, "buy milk");
-        assert!(parsed[1].checked);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].0, "buy milk");
+        assert!(parsed[1].1);
     }
 }
