@@ -1,6 +1,7 @@
 pub mod add;
 pub mod browse;
 pub mod completions;
+pub mod edit;
 pub mod log;
 pub mod mkdir;
 pub mod search;
