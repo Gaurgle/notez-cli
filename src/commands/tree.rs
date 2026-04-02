@@ -163,10 +163,14 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str) {
                     let bold = ratatui::style::Modifier::BOLD;
                     Line::from(vec![
                         Span::styled(" ", Style::default()),
-                        Span::styled("n", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
-                        Span::styled("avigate  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("e", Style::default().fg(theme::MAUVE).add_modifier(bold)),
-                        Span::styled("xpand  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("j", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
+                        Span::styled("/", Style::default().fg(theme::SURFACE)),
+                        Span::styled("k", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
+                        Span::styled(" move  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("l", Style::default().fg(theme::MAUVE).add_modifier(bold)),
+                        Span::styled(" expand  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("h", Style::default().fg(theme::MAUVE).add_modifier(bold)),
+                        Span::styled(" collapse  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("o", Style::default().fg(theme::GREEN).add_modifier(bold)),
                         Span::styled("pen  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("q", Style::default().fg(theme::PEACH).add_modifier(bold)),
