@@ -64,6 +64,11 @@ enum Commands {
         /// Shell to generate for (zsh, bash, fish)
         shell: String,
     },
+    /// Manage project todos
+    Todo {
+        /// Quick-add a todo item
+        item: Option<String>,
+    },
     /// Quick new note (alias for add)
     Znote {
         /// Note title (defaults to "untitled")
@@ -121,6 +126,7 @@ fn main() {
         Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, message),
         Some(Commands::Zlogs) => commands::browse::run_logz(cli.global),
         Some(Commands::Completions { shell }) => commands::completions::run_completions(shell),
+        Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, item),
         Some(Commands::Znote { title, r#in }) => {
             let (t, body) = split_title_body(title);
             commands::add::run_add(cli.global, t, r#in, body)

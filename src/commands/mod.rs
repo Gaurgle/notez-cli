@@ -4,4 +4,5 @@ pub mod completions;
 pub mod log;
 pub mod mkdir;
 pub mod search;
+pub mod todo;
 pub mod tree;
