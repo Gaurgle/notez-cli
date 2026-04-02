@@ -78,6 +78,8 @@ enum Commands {
         /// Search term to fuzzy-match note filename
         term: Option<String>,
     },
+    /// Interactive todo manager (alias for todo)
+    Todoz,
     /// Quick new note (alias for add)
     Znote {
         /// Note title (defaults to "untitled")
@@ -213,6 +215,7 @@ fn main() {
         Some(Commands::Zlogs) => commands::browse::run_logz(cli.global),
         Some(Commands::Completions { shell }) => commands::completions::run_completions(shell),
         Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, item),
+        Some(Commands::Todoz) => commands::todo::run_todo(cli.global, None),
         Some(Commands::Edit { term }) => commands::edit::run_edit(cli.global, term),
         Some(Commands::Znote { title, r#in }) => {
             let (t, body) = split_title_body(title);
