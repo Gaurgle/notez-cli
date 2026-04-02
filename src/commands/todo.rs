@@ -177,17 +177,19 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
                         Span::styled(vim.buffer.as_str(), Style::default().fg(theme::MAUVE)),
                     ])
                 } else {
+                    let bold = ratatui::style::Modifier::BOLD;
                     Line::from(vec![
-                        Span::styled(" space/x ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("toggle  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("a ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("add  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("e ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("edit  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("d ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("delete  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("q ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("quit", Style::default().fg(theme::OVERLAY)),
+                        Span::styled(" ", Style::default()),
+                        Span::styled("t", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
+                        Span::styled("oggle  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("a", Style::default().fg(theme::GREEN).add_modifier(bold)),
+                        Span::styled("dd  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("e", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
+                        Span::styled("dit  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("d", Style::default().fg(theme::PEACH).add_modifier(bold)),
+                        Span::styled("elete  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("q", Style::default().fg(theme::OVERLAY).add_modifier(bold)),
+                        Span::styled("uit", Style::default().fg(theme::OVERLAY)),
                     ])
                 };
                 frame.render_widget(Paragraph::new(status), chunks[1]);

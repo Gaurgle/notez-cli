@@ -152,15 +152,17 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str) {
                         Span::styled(vim.buffer.as_str(), Style::default().fg(theme::MAUVE)),
                     ])
                 } else {
+                    let bold = ratatui::style::Modifier::BOLD;
                     Line::from(vec![
-                        Span::styled(" ↑↓/jk ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("navigate  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("←→/hl ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("expand  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("enter/o ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("open  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("q ", Style::default().fg(theme::SAPPHIRE)),
-                        Span::styled("quit", Style::default().fg(theme::OVERLAY)),
+                        Span::styled(" ", Style::default()),
+                        Span::styled("n", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
+                        Span::styled("avigate  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("e", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
+                        Span::styled("xpand  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("o", Style::default().fg(theme::GREEN).add_modifier(bold)),
+                        Span::styled("pen  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("q", Style::default().fg(theme::OVERLAY).add_modifier(bold)),
+                        Span::styled("uit", Style::default().fg(theme::OVERLAY)),
                     ])
                 };
                 frame.render_widget(Paragraph::new(status), chunks[1]);
