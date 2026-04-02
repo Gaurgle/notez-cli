@@ -158,6 +158,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
             .expect("failed to draw");
 
         if let Event::Key(key) = event::read().expect("failed to read event") {
+            // Ctrl+C always exits
+            if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                break;
+            }
+
             // Input mode (adding new todo)
             if input_mode {
                 match key.code {

@@ -117,6 +117,11 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str) {
             .expect("failed to draw");
 
         if let Event::Key(key) = event::read().expect("failed to read event") {
+            // Ctrl+C always exits
+            if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                break;
+            }
+
             if let Some(cmd) = vim.handle_key(key) {
                 if VimCommandMode::is_quit(&cmd) {
                     break;
