@@ -1,8 +1,8 @@
 use std::fs;
-use std::io::{self, Write};
 use std::path::PathBuf;
 
 use dialoguer::{Confirm, Select};
+use rustyline::DefaultEditor;
 
 use crate::colors::Colors;
 use crate::config::{Config, detect_tool, expand_tilde};
@@ -10,22 +10,23 @@ use crate::numbering;
 
 const DIV_W: usize = 50;
 
-fn prompt_input(colors: &Colors, label: &str, default: &str) -> String {
-    print!(
+fn prompt_input(colors: &Colors, rl: &mut DefaultEditor, label: &str, default: &str) -> String {
+    let prompt = format!(
         "    {} {}: ",
         colors.overlay.apply_to(label),
         colors.surface.apply_to(format!("[{}]", default))
     );
-    io::stdout().flush().unwrap();
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
-    let input = input.trim();
-
-    if input.is_empty() {
-        default.to_string()
-    } else {
-        input.to_string()
+    match rl.readline_with_initial(&prompt, (default, "")) {
+        Ok(line) => {
+            let input = line.trim().to_string();
+            if input.is_empty() {
+                default.to_string()
+            } else {
+                input
+            }
+        }
+        Err(_) => default.to_string(),
     }
 }
 
@@ -43,6 +44,7 @@ fn step_header(colors: &Colors, step: usize, total: usize, title: &str) {
 pub fn run_setup() {
     let colors = Colors::new();
     let existing = Config::load();
+    let mut rl = DefaultEditor::new().expect("failed to initialize input handler");
 
     // Header
     println!();
@@ -133,7 +135,7 @@ pub fn run_setup() {
                 );
                 println!();
 
-                let input = prompt_input(&colors, "Folder path", &default_root);
+                let input = prompt_input(&colors, &mut rl, "Folder path", &default_root);
 
                 if input == "b" {
                     step = 1;
@@ -235,7 +237,7 @@ pub fn run_setup() {
                 );
                 println!();
 
-                let input = prompt_input(&colors, "Folder name", &default_quick);
+                let input = prompt_input(&colors, &mut rl, "Folder name", &default_quick);
 
                 if input == "b" {
                     step = 3;
@@ -263,7 +265,7 @@ pub fn run_setup() {
                 );
                 println!();
 
-                let input = prompt_input(&colors, "Folder name", &default_daily);
+                let input = prompt_input(&colors, &mut rl, "Folder name", &default_daily);
 
                 if input == "b" {
                     step = 4;
@@ -319,7 +321,7 @@ pub fn run_setup() {
                 if editor.is_empty() {
                     println!();
                     println!("    notez needs a text editor to open your notes.");
-                    let input = prompt_input(&colors, "Editor", "vim");
+                    let input = prompt_input(&colors, &mut rl, "Editor", "vim");
 
                     if input == "b" {
                         step = 5;
