@@ -66,53 +66,104 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str) {
         terminal
             .draw(|frame| {
                 let area = frame.area();
+                let inner_width = area.width.saturating_sub(6) as usize; // padding + borders + highlight
+
+                // Layout: main list + status bar
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(1), Constraint::Length(1)])
+                    .split(area);
 
                 let items: Vec<ListItem> = visible
                     .iter()
                     .map(|&idx| {
                         let node = &nodes[idx];
                         let indent = "  ".repeat(node.depth);
-                        let icon = if node.is_dir {
-                            if node.expanded { "▼ " } else { "▶ " }
-                        } else {
-                            "  "
-                        };
-                        let count_str = if node.is_dir && node.child_count > 0 {
-                            format!("  ({})", node.child_count)
-                        } else {
-                            String::new()
-                        };
-                        let line = format!("{}{}{}{}", indent, icon, node.name, count_str);
 
-                        let style = if node.is_dir {
-                            theme::dir_name()
+                        // Tree connectors for nested items
+                        let icon = if node.depth == 0 {
+                            if node.is_dir {
+                                if node.expanded { "▼ " } else { "▶ " }
+                            } else {
+                                "  "
+                            }
                         } else {
-                            theme::file_name()
+                            if node.is_dir {
+                                if node.expanded { "├─▼ " } else { "├─▶ " }
+                            } else {
+                                "│   "
+                            }
                         };
-                        ListItem::new(line).style(style)
+
+                        let name = &node.name;
+
+                        if node.is_dir && node.child_count > 0 {
+                            let count_str = format!("{} notes", node.child_count);
+                            let prefix = format!("{}{}{}", indent, icon, name);
+                            let dots_len = inner_width.saturating_sub(prefix.len() + count_str.len() + 1);
+                            let dots = "·".repeat(dots_len.max(2));
+
+                            let line = Line::from(vec![
+                                Span::styled(format!("{}{}", indent, icon), Style::default().fg(theme::SURFACE)),
+                                Span::styled(name.to_string(), Style::default().fg(theme::SAPPHIRE)),
+                                Span::styled(format!(" {} ", dots), Style::default().fg(theme::SURFACE)),
+                                Span::styled(count_str, Style::default().fg(theme::OVERLAY)),
+                            ]);
+                            ListItem::new(line)
+                        } else if node.is_dir {
+                            let line = Line::from(vec![
+                                Span::styled(format!("{}{}", indent, icon), Style::default().fg(theme::SURFACE)),
+                                Span::styled(name.to_string(), Style::default().fg(theme::SAPPHIRE)),
+                            ]);
+                            ListItem::new(line)
+                        } else {
+                            let line = Line::from(vec![
+                                Span::styled(format!("{}{}", indent, icon), Style::default().fg(theme::SURFACE)),
+                                Span::styled(name.to_string(), Style::default().fg(theme::TEXT)),
+                            ]);
+                            ListItem::new(line)
+                        }
                     })
                     .collect();
 
-                let header = format!(" notez — {} ", title);
+                let header = Line::from(vec![
+                    Span::styled(" notez ", Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
+                    Span::styled("— ", Style::default().fg(theme::SURFACE)),
+                    Span::styled(format!("{} ", title), Style::default().fg(theme::OVERLAY)),
+                ]);
+
                 let block = Block::default()
                     .title(header)
-                    .title_style(theme::header())
                     .borders(Borders::ALL)
                     .border_style(theme::border())
-                    .padding(Padding::new(1, 1, 0, 0));
+                    .border_type(ratatui::widgets::BorderType::Rounded)
+                    .padding(Padding::new(1, 1, 1, 0));
 
                 let list = List::new(items)
                     .block(block)
                     .highlight_style(theme::selected())
-                    .highlight_symbol("▸ ");
+                    .highlight_symbol("  ▸ ");
 
-                frame.render_stateful_widget(list, area, &mut state);
+                frame.render_stateful_widget(list, chunks[0], &mut state);
 
-                if vim.active {
-                    let cmd_area = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
-                    let cmd = Paragraph::new(vim.buffer.as_str()).style(theme::command_line());
-                    frame.render_widget(cmd, cmd_area);
-                }
+                // Status bar
+                let status = if vim.active {
+                    Line::from(vec![
+                        Span::styled(vim.buffer.as_str(), Style::default().fg(theme::MAUVE)),
+                    ])
+                } else {
+                    Line::from(vec![
+                        Span::styled(" ↑↓/jk ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("navigate  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("←→/hl ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("expand  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("enter/o ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("open  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("q ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("quit", Style::default().fg(theme::OVERLAY)),
+                    ])
+                };
+                frame.render_widget(Paragraph::new(status), chunks[1]);
             })
             .expect("failed to draw");
 

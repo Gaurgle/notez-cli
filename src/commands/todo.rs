@@ -111,49 +111,86 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
             .draw(|frame| {
                 let area = frame.area();
 
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(1), Constraint::Length(1)])
+                    .split(area);
+
                 let list_items: Vec<ListItem> = items
                     .iter()
                     .map(|item| {
-                        let checkbox = if item.checked { "  [x] " } else { "  [ ] " };
-                        let style = if item.checked {
-                            theme::checked()
+                        if item.checked {
+                            let line = Line::from(vec![
+                                Span::styled("  [x] ", Style::default().fg(theme::SURFACE)),
+                                Span::styled(
+                                    item.text.clone(),
+                                    Style::default()
+                                        .fg(theme::OVERLAY)
+                                        .add_modifier(ratatui::style::Modifier::CROSSED_OUT),
+                                ),
+                            ]);
+                            ListItem::new(line)
                         } else {
-                            theme::unchecked()
-                        };
-                        ListItem::new(format!("{}{}", checkbox, item.text)).style(style)
+                            let line = Line::from(vec![
+                                Span::styled("  [ ] ", Style::default().fg(theme::SAPPHIRE)),
+                                Span::styled(item.text.clone(), Style::default().fg(theme::TEXT)),
+                            ]);
+                            ListItem::new(line)
+                        }
                     })
                     .collect();
 
                 let todo_count = items.iter().filter(|i| !i.checked).count();
                 let done_count = items.iter().filter(|i| i.checked).count();
-                let title = format!(" TODO — {} pending, {} done ", todo_count, done_count);
+
+                let title = Line::from(vec![
+                    Span::styled(" TODO ", Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
+                    Span::styled("— ", Style::default().fg(theme::SURFACE)),
+                    Span::styled(format!("{} pending", todo_count), Style::default().fg(theme::SAPPHIRE)),
+                    Span::styled(" · ", Style::default().fg(theme::SURFACE)),
+                    Span::styled(format!("{} done ", done_count), Style::default().fg(theme::GREEN)),
+                ]);
 
                 let block = Block::default()
                     .title(title)
-                    .title_style(theme::header())
                     .borders(Borders::ALL)
                     .border_style(theme::border())
-                    .padding(Padding::new(1, 1, 0, 0));
+                    .border_type(ratatui::widgets::BorderType::Rounded)
+                    .padding(Padding::new(1, 1, 1, 0));
 
                 let list = List::new(list_items)
                     .block(block)
                     .highlight_style(theme::selected())
-                    .highlight_symbol("▸ ");
+                    .highlight_symbol("  ▸ ");
 
-                frame.render_stateful_widget(list, area, &mut state);
+                frame.render_stateful_widget(list, chunks[0], &mut state);
 
-                // Bottom bar
-                if input_mode || edit_mode {
-                    let label = if edit_mode { "edit: " } else { "new: " };
-                    let input_area = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
-                    let input = Paragraph::new(format!("{}{}", label, input_buffer))
-                        .style(theme::command_line());
-                    frame.render_widget(input, input_area);
+                // Status bar
+                let status = if input_mode || edit_mode {
+                    let label = if edit_mode { " edit: " } else { " new: " };
+                    Line::from(vec![
+                        Span::styled(label, Style::default().fg(theme::MAUVE)),
+                        Span::styled(input_buffer.as_str(), Style::default().fg(theme::TEXT)),
+                    ])
                 } else if vim.active {
-                    let cmd_area = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
-                    let cmd = Paragraph::new(vim.buffer.as_str()).style(theme::command_line());
-                    frame.render_widget(cmd, cmd_area);
-                }
+                    Line::from(vec![
+                        Span::styled(vim.buffer.as_str(), Style::default().fg(theme::MAUVE)),
+                    ])
+                } else {
+                    Line::from(vec![
+                        Span::styled(" space/x ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("toggle  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("a ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("add  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("e ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("edit  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("d ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("delete  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("q ", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled("quit", Style::default().fg(theme::OVERLAY)),
+                    ])
+                };
+                frame.render_widget(Paragraph::new(status), chunks[1]);
             })
             .expect("failed to draw");
 
