@@ -88,6 +88,8 @@ Multi-word titles work without quotes: `notez add my cool idea`
 |---|---|
 | `notez todo` | Interactive todo manager (vim keys, space/x to toggle) |
 | `notez todo "item"` | Quick-add a todo item |
+| `notez todoz` | Alias for `notez todo` |
+| `notez todo -g` | View all todos across every project |
 
 ### Organization
 
@@ -105,6 +107,7 @@ Add `-g` before or after any command to target `~/notez/` instead of `./notez/`:
 notez -g add personal thought       # → ~/notez/00_quick-notes/
 notez -g log "reminder for later"   # → ~/notez/01_daily-logs/
 notez -g tree                       # shows all projects
+notez -g todo                       # todos from every project, grouped with paths
 ```
 
 ### Shortcuts
@@ -116,6 +119,7 @@ Built-in shortcut subcommands:
 | `notez zlog <message>` | `notez log` |
 | `notez zlogs` | `notez logz` |
 | `notez znote [title]` | `notez add` |
+| `notez todoz` | `notez todo` |
 
 For even shorter access, add shell aliases (`noglob` prevents zsh from treating `?` `*` etc. as wildcards):
 
@@ -124,6 +128,7 @@ alias zlog='noglob notez zlog'
 alias zlogs='notez zlogs'
 alias logz='notez logz'
 alias znote='noglob notez znote'
+alias todoz='notez todoz'
 ```
 
 ## Tab Completions
