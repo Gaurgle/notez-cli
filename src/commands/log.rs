@@ -7,7 +7,8 @@ use chrono::Local;
 use crate::colors::Colors;
 use crate::config::Config;
 
-pub fn run_log(message: Vec<String>) {
+pub fn run_log(global: bool, message: Vec<String>) {
+    let _ = global;
     let config = Config::require();
     let logs_path = config.daily_logs_path();
     fs::create_dir_all(&logs_path).expect("failed to create daily logs directory");

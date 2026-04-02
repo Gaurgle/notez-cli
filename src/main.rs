@@ -9,6 +9,10 @@ mod setup;
 #[derive(Parser)]
 #[command(name = "notez", about = "A CLI note-taking tool", version)]
 struct Cli {
+    /// Use global ~/notez/ instead of local ./notez/
+    #[arg(short = 'g', long = "global", global = true)]
+    global: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -96,22 +100,22 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        None => commands::browse::run_browse(),
+        None => commands::browse::run_browse(cli.global),
         Some(Commands::Add { title, r#in }) => {
             let (t, body) = split_title_body(title);
-            commands::add::run_add(t, r#in, body)
+            commands::add::run_add(cli.global, t, r#in, body)
         }
-        Some(Commands::Log { message }) => commands::log::run_log(message),
-        Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(),
-        Some(Commands::Mkdir { name }) => commands::mkdir::run_mkdir(name),
-        Some(Commands::Search { term }) => commands::search::run_search(term),
-        Some(Commands::Tree) => commands::tree::run_tree(),
+        Some(Commands::Log { message }) => commands::log::run_log(cli.global, message),
+        Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global),
+        Some(Commands::Mkdir { name }) => commands::mkdir::run_mkdir(cli.global, name),
+        Some(Commands::Search { term }) => commands::search::run_search(cli.global, term),
+        Some(Commands::Tree) => commands::tree::run_tree(cli.global),
         Some(Commands::Setup) => setup::run_setup(),
-        Some(Commands::Zlog { message }) => commands::log::run_log(message),
-        Some(Commands::Zlogs) => commands::browse::run_logz(),
+        Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, message),
+        Some(Commands::Zlogs) => commands::browse::run_logz(cli.global),
         Some(Commands::Znote { title, r#in }) => {
             let (t, body) = split_title_body(title);
-            commands::add::run_add(t, r#in, body)
+            commands::add::run_add(cli.global, t, r#in, body)
         }
     }
 }

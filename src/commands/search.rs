@@ -3,7 +3,8 @@ use std::process::Command;
 use crate::colors::Colors;
 use crate::config::Config;
 
-pub fn run_search(term: String) {
+pub fn run_search(global: bool, term: String) {
+    let _ = global;
     let config = Config::require();
     let root = config.root_path();
     let colors = Colors::new();

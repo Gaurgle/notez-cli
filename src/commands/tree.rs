@@ -26,7 +26,8 @@ struct SubdirEntry {
 /// Numbered directories (00-99) appear first with file counts and
 /// recursive subdirectory listings. Non-numbered directories appear
 /// below a divider.
-pub fn run_tree() {
+pub fn run_tree(global: bool) {
+    let _ = global;
     let config = Config::require();
     let root = config.root_path();
     let colors = Colors::new();

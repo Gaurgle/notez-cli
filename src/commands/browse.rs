@@ -2,7 +2,8 @@ use std::process::Command;
 
 use crate::config::Config;
 
-pub fn run_browse() {
+pub fn run_browse(global: bool) {
+    let _ = global;
     let config = Config::require();
     let root = config.root_path();
 
@@ -19,7 +20,8 @@ pub fn run_browse() {
     }
 }
 
-pub fn run_logz() {
+pub fn run_logz(global: bool) {
+    let _ = global;
     let config = Config::require();
     let logs_path = config.daily_logs_path();
 

@@ -8,7 +8,8 @@ use crate::colors::Colors;
 use crate::config::Config;
 use crate::numbering;
 
-pub fn run_add(title: Option<String>, target: Option<String>, body: Option<String>) {
+pub fn run_add(global: bool, title: Option<String>, target: Option<String>, body: Option<String>) {
+    let _ = global;
     let config = Config::require();
     let date = Local::now().format("%Y-%m-%d").to_string();
     let raw_title = title.unwrap_or_else(|| "untitled".into());

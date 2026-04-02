@@ -5,7 +5,8 @@ use crate::colors::Colors;
 use crate::config::Config;
 use crate::numbering;
 
-pub fn run_mkdir(name_parts: Vec<String>) {
+pub fn run_mkdir(global: bool, name_parts: Vec<String>) {
+    let _ = global;
     let config = Config::require();
     let root = config.root_path();
     let raw_name = name_parts.join(" ");
