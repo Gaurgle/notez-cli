@@ -9,8 +9,12 @@ mod setup;
 mod tui;
 
 #[derive(Parser)]
-#[command(name = "notez", about = "A CLI note-taking tool", version)]
+#[command(name = "notez", about = "A CLI note-taking tool", version, disable_help_flag = true)]
 pub struct Cli {
+    /// Show help
+    #[arg(short = 'h', long = "help", global = true)]
+    help: bool,
+
     /// Use global ~/notez/ instead of local ./notez/
     #[arg(short = 'g', long = "global", global = true)]
     global: bool,
@@ -113,8 +117,85 @@ fn split_title_body(args: Vec<String>) -> (Option<String>, Option<String>) {
     (title, body)
 }
 
+fn print_help() {
+    let c = colors::Colors::new();
+    let div = c.divider(50);
+
+    println!();
+    println!("  {}", div);
+    println!(
+        "  {}  {}",
+        c.lavender.apply_to("notez"),
+        c.overlay.apply_to("a local-first note-taking tool")
+    );
+    println!("  {}", div);
+    println!();
+
+    let cmd = |name: &str, desc: &str| {
+        println!(
+            "    {:<28} {}",
+            c.sapphire.apply_to(name),
+            c.overlay.apply_to(desc)
+        );
+    };
+
+    println!("  {}", c.mauve.apply_to("Notes"));
+    cmd("notez add [title]", "create a note, open in editor");
+    cmd("notez add [title] \"body\"", "create with content, no editor");
+    cmd("notez add [title] --in", "create in a subdirectory (picker)");
+    cmd("notez edit [term]", "open an existing note (fuzzy search)");
+    println!();
+
+    println!("  {}", c.mauve.apply_to("Daily Logs"));
+    cmd("notez log <message>", "append to today's log");
+    cmd("notez logz / logs", "browse daily logs");
+    println!();
+
+    println!("  {}", c.mauve.apply_to("Organize"));
+    cmd("notez tree", "interactive tree navigator");
+    cmd("notez todo", "interactive todo manager");
+    cmd("notez todo \"item\"", "quick-add a todo");
+    cmd("notez mkdir <name>", "create a numbered subdirectory");
+    println!();
+
+    println!("  {}", c.mauve.apply_to("Browse & Search"));
+    cmd("notez", "browse notes in yazi");
+    cmd("notez search <term>", "search note content (rg + fzf)");
+    println!();
+
+    println!("  {}", c.mauve.apply_to("Shortcuts"));
+    cmd("notez zlog <message>", "same as notez log");
+    cmd("notez zlogs", "same as notez logz");
+    cmd("notez znote [title]", "same as notez add");
+    println!();
+
+    println!("  {}", c.mauve.apply_to("Setup"));
+    cmd("notez setup", "run the setup wizard");
+    cmd("notez completions <shell>", "generate shell completions");
+    println!();
+
+    println!("  {}", div);
+    println!(
+        "  {}  {}",
+        c.overlay.apply_to("-g"),
+        c.overlay.apply_to("add before any command for global ~/notez/")
+    );
+    println!(
+        "  {}  {}",
+        c.overlay.apply_to("-h"),
+        c.overlay.apply_to("show this help")
+    );
+    println!("  {}", div);
+    println!();
+}
+
 fn main() {
     let cli = Cli::parse();
+
+    if cli.help {
+        print_help();
+        return;
+    }
 
     match cli.command {
         None => commands::browse::run_browse(cli.global),
