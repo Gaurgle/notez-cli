@@ -46,6 +46,21 @@ enum Commands {
     Tree,
     /// Run the setup wizard
     Setup,
+    /// Quick log entry (alias for log)
+    Zlog {
+        /// Log message
+        message: Vec<String>,
+    },
+    /// Open daily logs directory (alias for logz)
+    Zlogs,
+    /// Quick new note (alias for add)
+    Znote {
+        /// Note title (defaults to "untitled")
+        title: Option<String>,
+        /// Target directory
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        r#in: Option<String>,
+    },
 }
 
 fn main() {
@@ -60,5 +75,8 @@ fn main() {
         Some(Commands::Search { term }) => commands::search::run_search(term),
         Some(Commands::Tree) => commands::tree::run_tree(),
         Some(Commands::Setup) => setup::run_setup(),
+        Some(Commands::Zlog { message }) => commands::log::run_log(message),
+        Some(Commands::Zlogs) => commands::browse::run_logz(),
+        Some(Commands::Znote { title, r#in }) => commands::add::run_add(title, r#in),
     }
 }

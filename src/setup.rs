@@ -7,17 +7,32 @@ use crate::colors::Colors;
 use crate::config::{Config, detect_tool, expand_tilde};
 use crate::numbering;
 
+const DIV_W: usize = 50;
+
+fn step_header(colors: &Colors, step: usize, total: usize, title: &str) {
+    println!();
+    println!(
+        "  {} {} {}",
+        colors.surface.apply_to("──"),
+        colors.mauve.apply_to(format!("Step {} of {} — {}", step, total, title)),
+        colors.surface.apply_to("─".repeat(DIV_W.saturating_sub(title.len() + 16)))
+    );
+    println!();
+}
+
 pub fn run_setup() {
     let colors = Colors::new();
     let existing = Config::load();
 
+    // Header
     println!();
+    println!("  {}", colors.divider(DIV_W));
     println!(
-        "  {} {}",
+        "  {}  {}",
         colors.lavender.apply_to("notez"),
-        colors.overlay.apply_to("— setup wizard")
+        colors.overlay.apply_to("setup")
     );
-    println!();
+    println!("  {}", colors.divider(DIV_W));
 
     let total = 7;
 
@@ -62,38 +77,44 @@ pub fn run_setup() {
         match step {
             // Step 1: Welcome
             1 => {
-                println!(
-                    "  {} Welcome! Let's configure your notes.",
-                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
-                );
+                step_header(&colors, step, total, "Welcome");
+
+                println!("    Let's get notez set up. This will only take a moment.");
                 println!();
                 println!(
-                    "  {} Press Enter to accept defaults, or type a new value.",
-                    colors.overlay.apply_to("tip:")
+                    "    {} Each step has a suggested default shown in brackets.",
+                    colors.overlay.apply_to("•")
                 );
                 println!(
-                    "  {} Type 'b' to go back a step.\n",
-                    colors.overlay.apply_to("    ")
+                    "    {} Just press {} to accept it, or type something new.",
+                    colors.overlay.apply_to("•"),
+                    colors.green.apply_to("Enter")
                 );
+                println!(
+                    "    {} Type {} at any prompt to go back a step.",
+                    colors.overlay.apply_to("•"),
+                    colors.yellow.apply_to("b")
+                );
+
                 step = 2;
             }
 
             // Step 2: Root directory
             2 => {
+                step_header(&colors, step, total, "Where to keep your notes");
+
+                println!("    Choose a folder where all your notes will live.");
+                println!("    notez will create its folders inside this location.");
+                println!();
                 println!(
-                    "  {} Pick a folder for all your notes.",
-                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
+                    "    {}  {}",
+                    colors.overlay.apply_to("examples:"),
+                    colors.sapphire.apply_to("~/notes  ~/Documents/notes  ~/notez")
                 );
-                println!(
-                    "  {} Enter a full path (e.g. ~/notes, ~/Documents/notes).",
-                    colors.overlay.apply_to("   ")
-                );
-                println!(
-                    "  {} This is where notez will create its numbered directories.\n",
-                    colors.overlay.apply_to("   ")
-                );
+                println!();
+
                 let input: String = Input::new()
-                    .with_prompt("  Path")
+                    .with_prompt("    Folder path")
                     .default(default_root.clone())
                     .interact_text()
                     .unwrap();
@@ -107,11 +128,13 @@ pub fn run_setup() {
                 let root_path = PathBuf::from(&root_dir);
 
                 if !root_path.exists() {
+                    println!();
+                    println!(
+                        "    That folder doesn't exist yet: {}",
+                        colors.yellow.apply_to(&root_dir)
+                    );
                     let create = Confirm::new()
-                        .with_prompt(format!(
-                            "  {} does not exist. Create it?",
-                            colors.overlay.apply_to(&root_dir)
-                        ))
+                        .with_prompt("    Would you like to create it?")
                         .default(true)
                         .interact()
                         .unwrap();
@@ -120,6 +143,10 @@ pub fn run_setup() {
                         continue;
                     }
                     fs::create_dir_all(&root_path).expect("failed to create root directory");
+                    println!(
+                        "    {} Folder created!",
+                        colors.green.apply_to("✓")
+                    );
                 }
 
                 step = 3;
@@ -127,34 +154,38 @@ pub fn run_setup() {
 
             // Step 3: Scan for conflicts
             3 => {
-                println!(
-                    "  {} Scanning for existing numbered directories...",
-                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
-                );
+                step_header(&colors, step, total, "Quick check");
+
+                println!("    Looking for any existing numbered folders...");
+                println!();
 
                 let root_path = PathBuf::from(&root_dir);
                 let existing_numbered = numbering::scan_numbered_dirs(&root_path);
 
                 if !existing_numbered.is_empty() {
                     println!(
-                        "\n  {} Found existing 00-99 prefixed directories:",
-                        colors.yellow.apply_to("!")
+                        "    {} Found some folders that use the 00-99 numbering notez uses:",
+                        colors.yellow.apply_to("heads up!")
                     );
+                    println!();
                     for d in &existing_numbered {
                         println!(
-                            "    {}",
+                            "      {}  {}",
+                            colors.overlay.apply_to("•"),
                             colors.sapphire.apply_to(&d.full_name)
                         );
                     }
                     println!();
+                    println!("    These won't be changed. notez will just work around them.");
+                    println!();
 
                     let choices = vec![
-                        "Adopt them into notez numbering (keep as-is)",
-                        "Go back and pick a different root directory",
+                        "Sounds good, keep them as they are",
+                        "Let me pick a different folder instead",
                     ];
 
                     let choice = Select::new()
-                        .with_prompt("  How to handle these?")
+                        .with_prompt("    What would you like to do?")
                         .items(&choices)
                         .default(0)
                         .interact()
@@ -169,7 +200,7 @@ pub fn run_setup() {
                     }
                 } else {
                     println!(
-                        "  {} No conflicts found.\n",
+                        "    {} All clear, no conflicts.",
                         colors.green.apply_to("✓")
                     );
                 }
@@ -179,12 +210,17 @@ pub fn run_setup() {
 
             // Step 4: Quick notes dir name
             4 => {
+                step_header(&colors, step, total, "Quick notes folder");
+
+                println!("    When you jot down a quick note, it goes here.");
                 println!(
-                    "  {} Name for your quick notes folder (will become 00_<name>)",
-                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
+                    "    notez will add a {} prefix automatically.",
+                    colors.sapphire.apply_to("00_")
                 );
+                println!();
+
                 let input: String = Input::new()
-                    .with_prompt("  Quick notes name")
+                    .with_prompt("    Folder name")
                     .default(default_quick.clone())
                     .interact_text()
                     .unwrap();
@@ -195,17 +231,28 @@ pub fn run_setup() {
                 }
 
                 quick_name = format!("00_{}", numbering::sanitize_name(input.trim()));
+                println!(
+                    "\n    {} Will create: {}",
+                    colors.green.apply_to("✓"),
+                    colors.sapphire.apply_to(&quick_name)
+                );
+
                 step = 5;
             }
 
             // Step 5: Daily logs dir name
             5 => {
+                step_header(&colors, step, total, "Daily logs folder");
+
+                println!("    Your daily log entries will be saved here.");
                 println!(
-                    "  {} Name for your daily logs folder (will become 01_<name>)",
-                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
+                    "    notez will add a {} prefix automatically.",
+                    colors.sapphire.apply_to("01_")
                 );
+                println!();
+
                 let input: String = Input::new()
-                    .with_prompt("  Daily logs name")
+                    .with_prompt("    Folder name")
                     .default(default_daily.clone())
                     .interact_text()
                     .unwrap();
@@ -216,38 +263,56 @@ pub fn run_setup() {
                 }
 
                 daily_name = format!("01_{}", numbering::sanitize_name(input.trim()));
+                println!(
+                    "\n    {} Will create: {}",
+                    colors.green.apply_to("✓"),
+                    colors.sapphire.apply_to(&daily_name)
+                );
+
                 step = 6;
             }
 
             // Step 6: Detect tools
             6 => {
-                println!(
-                    "  {} Detecting tools...\n",
-                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
-                );
+                step_header(&colors, step, total, "Checking your tools");
+
+                println!("    notez works best with a few optional tools.");
+                println!("    Don't worry if some are missing — there are built-in alternatives.");
+                println!();
 
                 editor = std::env::var("EDITOR").unwrap_or_else(|_| default_editor.clone());
                 has_fzf = detect_tool("fzf");
                 has_rg = detect_tool("rg");
                 has_yazi = detect_tool("yazi");
 
-                let check = |found: bool| -> String {
-                    if found {
-                        colors.green.apply_to("✓").to_string()
+                let found = |name: &str, ok: bool, detail: &str| {
+                    if ok {
+                        println!(
+                            "    {}  {:<10} {}",
+                            colors.green.apply_to("✓"),
+                            name,
+                            colors.overlay.apply_to(detail)
+                        );
                     } else {
-                        format!("{} (using fallback)", colors.yellow.apply_to("✗"))
+                        println!(
+                            "    {}  {:<10} {}",
+                            colors.yellow.apply_to("–"),
+                            name,
+                            colors.overlay.apply_to("not found, will use built-in alternative")
+                        );
                     }
                 };
 
-                println!("    $EDITOR   {} {}", check(!editor.is_empty()), colors.overlay.apply_to(&editor));
-                println!("    fzf       {}", check(has_fzf));
-                println!("    rg        {}", check(has_rg));
-                println!("    yazi      {}", check(has_yazi));
-                println!();
+                found("editor", !editor.is_empty(), &format!("using {}", editor));
+                found("fzf", has_fzf, "for fuzzy search and selection");
+                found("rg", has_rg, "for fast note searching");
+                found("yazi", has_yazi, "for browsing your notes folder");
 
                 if editor.is_empty() {
+                    println!();
+                    println!("    notez needs a text editor to open your notes.");
                     let input: String = Input::new()
-                        .with_prompt("  Editor command (required)")
+                        .with_prompt("    Which editor would you like to use?")
                         .default("vim".into())
                         .interact_text()
                         .unwrap();
@@ -264,24 +329,40 @@ pub fn run_setup() {
 
             // Step 7: Confirm & create
             7 => {
+                step_header(&colors, step, total, "Ready to go!");
+
+                println!("    Here's what notez will set up:");
+                println!();
                 println!(
-                    "  {} Summary:\n",
-                    colors.mauve.apply_to(format!("[{}/{}]", step, total))
+                    "    {}  {}",
+                    colors.overlay.apply_to("Notes folder:"),
+                    colors.sapphire.apply_to(&root_dir)
                 );
-                println!("    Root:        {}", colors.sapphire.apply_to(&root_dir));
-                println!("    Quick notes: {}", colors.sapphire.apply_to(&quick_name));
-                println!("    Daily logs:  {}", colors.sapphire.apply_to(&daily_name));
-                println!("    Editor:      {}", colors.overlay.apply_to(&editor));
+                println!(
+                    "    {}  {}",
+                    colors.overlay.apply_to("Quick notes: "),
+                    colors.sapphire.apply_to(&quick_name)
+                );
+                println!(
+                    "    {}  {}",
+                    colors.overlay.apply_to("Daily logs:  "),
+                    colors.sapphire.apply_to(&daily_name)
+                );
+                println!(
+                    "    {}  {}",
+                    colors.overlay.apply_to("Editor:      "),
+                    colors.sapphire.apply_to(&editor)
+                );
                 println!();
 
                 let confirm = Confirm::new()
-                    .with_prompt("  Create directories and save config?")
+                    .with_prompt("    Look good? Create everything?")
                     .default(true)
                     .interact()
                     .unwrap();
 
                 if !confirm {
-                    step = 6;
+                    step = 2;
                     continue;
                 }
 
@@ -304,13 +385,42 @@ pub fn run_setup() {
                 };
                 config.save().expect("failed to save config");
 
+                // Done!
+                println!();
+                println!("  {}", colors.divider(DIV_W));
                 println!(
-                    "\n  {} notez is ready!\n",
+                    "  {}  You're all set!",
                     colors.green.apply_to("✓")
                 );
-
-                // Offer shell aliases
-                offer_aliases(&colors);
+                println!("  {}", colors.divider(DIV_W));
+                println!();
+                println!("    Here are some things to try:");
+                println!();
+                println!(
+                    "    {}  {}       {}",
+                    colors.overlay.apply_to("•"),
+                    colors.sapphire.apply_to("notez add"),
+                    colors.overlay.apply_to("create a new note")
+                );
+                println!(
+                    "    {}  {}       {}",
+                    colors.overlay.apply_to("•"),
+                    colors.sapphire.apply_to("notez log"),
+                    colors.overlay.apply_to("write a quick log entry")
+                );
+                println!(
+                    "    {}  {}      {}",
+                    colors.overlay.apply_to("•"),
+                    colors.sapphire.apply_to("notez tree"),
+                    colors.overlay.apply_to("see your notes at a glance")
+                );
+                println!(
+                    "    {}  {}           {}",
+                    colors.overlay.apply_to("•"),
+                    colors.sapphire.apply_to("notez"),
+                    colors.overlay.apply_to("browse your notes folder")
+                );
+                println!();
 
                 break;
             }
@@ -318,53 +428,4 @@ pub fn run_setup() {
             _ => break,
         }
     }
-}
-
-fn offer_aliases(colors: &Colors) {
-    println!(
-        "  {} Optional shell aliases for quick access:\n",
-        colors.mauve.apply_to("aliases")
-    );
-
-    let aliases = vec![
-        ("zlog", "notez log", "Quick log entry"),
-        ("zlogs", "notez logz", "Open daily logs dir"),
-        ("logz", "notez logz", "Open daily logs dir"),
-        ("znote", "notez add", "Quick new note"),
-    ];
-
-    let mut selected = Vec::new();
-
-    for (alias, target, desc) in &aliases {
-        let label = format!(
-            "  {} {} → {}",
-            colors.sapphire.apply_to(format!("{:<8}", alias)),
-            colors.overlay.apply_to("→"),
-            colors.overlay.apply_to(format!("{:<14} {}", target, desc))
-        );
-        println!("{}", label);
-        let add = Confirm::new()
-            .with_prompt(format!("  Add {}?", alias))
-            .default(true)
-            .interact()
-            .unwrap();
-        if add {
-            selected.push((*alias, *target));
-        }
-    }
-
-    if selected.is_empty() {
-        println!("\n  {} No aliases selected.\n\n", colors.overlay.apply_to("─"));
-        return;
-    }
-
-    println!("\n  Add these lines to your shell config:\n");
-    for (alias, target) in &selected {
-        println!(
-            "    {}",
-            colors.green.apply_to(format!("alias {}='{}'", alias, target))
-        );
-    }
-    println!();
-    println!();
 }
