@@ -30,16 +30,20 @@ A friendly step-by-step wizard that configures your home notes folder, directory
 
 ```
 ~/Repos/my-project/
-  notez/                        ← your notes live here
-    2026-04-02-api-design.md
-    2026-04-02-daily-log.md
+  notez/                            ← same layout as global
+    00_quick-notes/                 ← notez add
+      2026-04-02-api-design.md
+    01_daily-logs/                  ← notez log
+      2026-04-02-daily-log.md
+    02_research/                    ← notez mkdir
 
-~/notez/                        ← unified home view
-  00_quick-notes/               ← global quick notes (-g)
-  01_daily-logs/                ← global daily logs (-g)
-  02_my-project/                ← symlinks to project notes
-    2026-04-02-api-design.md  → ~/Repos/my-project/notez/...
-    2026-04-02-daily-log.md   → ~/Repos/my-project/notez/...
+~/notez/                            ← unified home view
+  00_quick-notes/                   ← global quick notes (-g)
+  01_daily-logs/                    ← global daily logs (-g)
+  02_my-project/                    ← symlinks to project dirs
+    00_quick-notes/               → ~/Repos/my-project/notez/00_quick-notes/
+    01_daily-logs/                → ~/Repos/my-project/notez/01_daily-logs/
+    02_research/                  → ~/Repos/my-project/notez/02_research/
 ```
 
 ## Commands
