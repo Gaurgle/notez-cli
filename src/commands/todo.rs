@@ -215,6 +215,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
     let mut edit_mode = false;
     let mut edit_idx: usize = 0;
     let mut input_buffer = String::new();
+    let mut confirm_delete = false;
 
     loop {
         terminal
@@ -304,7 +305,15 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                 frame.render_stateful_widget(list, chunks[0], &mut state);
 
                 // Status bar
-                let status = if input_mode || edit_mode {
+                let status = if confirm_delete {
+                    Line::from(vec![
+                        Span::styled(" delete this todo? ", Style::default().fg(theme::PEACH)),
+                        Span::styled("y", Style::default().fg(theme::PEACH).add_modifier(ratatui::style::Modifier::BOLD)),
+                        Span::styled("es  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("n", Style::default().fg(theme::SAPPHIRE).add_modifier(ratatui::style::Modifier::BOLD)),
+                        Span::styled("o", Style::default().fg(theme::OVERLAY)),
+                    ])
+                } else if input_mode || edit_mode {
                     let label = if edit_mode { " edit: " } else { " new: " };
                     Line::from(vec![
                         Span::styled(label, Style::default().fg(theme::MAUVE)),
@@ -338,6 +347,26 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
             // Ctrl+C always exits
             if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
                 break;
+            }
+
+            // Confirm delete mode
+            if confirm_delete {
+                match key.code {
+                    KeyCode::Char('y') | KeyCode::Enter => {
+                        let selected = state.selected().unwrap_or(0);
+                        if selected < items.len() && !items[selected].is_header {
+                            items.remove(selected);
+                            if selected >= items.len() && !items.is_empty() {
+                                state.select(Some(items.len() - 1));
+                            }
+                        }
+                        confirm_delete = false;
+                    }
+                    _ => {
+                        confirm_delete = false;
+                    }
+                }
+                continue;
             }
 
             // Input mode (adding new todo)
@@ -463,10 +492,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
 
                 KeyCode::Char('d') => {
                     if selected < items.len() && !items[selected].is_header {
-                        items.remove(selected);
-                        if selected >= items.len() && !items.is_empty() {
-                            state.select(Some(items.len() - 1));
-                        }
+                        confirm_delete = true;
                     }
                 }
 
