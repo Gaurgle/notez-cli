@@ -7,26 +7,29 @@ use chrono::Local;
 use crate::colors::Colors;
 use crate::config::Config;
 use crate::numbering;
+use crate::project;
 
 pub fn run_add(global: bool, title: Option<String>, target: Option<String>, body: Option<String>) {
-    let _ = global;
     let config = Config::require();
     let date = Local::now().format("%Y-%m-%d").to_string();
     let raw_title = title.unwrap_or_else(|| "untitled".into());
     let clean_title = sanitize_title(&raw_title);
 
+    let root = project::resolve_notez_dir(&config, global);
+
     let target_dir = match target {
         None => {
-            let dir = config.quick_notes_path();
-            fs::create_dir_all(&dir).expect("failed to create quick notes directory");
-            dir
+            if global {
+                let dir = config.quick_notes_path();
+                fs::create_dir_all(&dir).expect("failed to create quick notes directory");
+                dir
+            } else {
+                fs::create_dir_all(&root).expect("failed to create local notez directory");
+                root.clone()
+            }
         }
-        Some(explicit) if !explicit.is_empty() => {
-            resolve_target_dir(&config, &explicit)
-        }
-        Some(_) => {
-            pick_directory(&config)
-        }
+        Some(explicit) if !explicit.is_empty() => resolve_target_dir(&root, &explicit),
+        Some(_) => pick_directory(&config, &root),
     };
 
     let file_path = create_note_file(&target_dir, &date, &clean_title, body.as_deref());
@@ -36,6 +39,11 @@ pub fn run_add(global: bool, title: Option<String>, target: Option<String>, body
         colors.green.apply_to("✓"),
         colors.sapphire.apply_to(file_path.file_name().unwrap().to_str().unwrap())
     );
+
+    if !global {
+        let home_dir = project::ensure_home_project_dir(&config);
+        project::mirror_file_to_home(&file_path, &home_dir);
+    }
 
     if body.is_none() {
         Command::new(&config.editor)
@@ -70,17 +78,15 @@ fn sanitize_title(title: &str) -> String {
         .collect()
 }
 
-fn resolve_target_dir(config: &Config, target: &str) -> PathBuf {
-    let root = config.root_path();
-
-    // Check if it's already a valid path within root
+fn resolve_target_dir(root: &Path, target: &str) -> PathBuf {
     let full_path = root.join(target);
     if full_path.exists() {
         return full_path;
     }
 
-    // Try fuzzy match against numbered dirs
-    if let Some(matched) = numbering::fuzzy_match_dir(&root, target.split('/').next().unwrap_or(target)) {
+    if let Some(matched) =
+        numbering::fuzzy_match_dir(root, target.split('/').next().unwrap_or(target))
+    {
         let base = root.join(&matched.full_name);
         let remainder: String = target.split('/').skip(1).collect::<Vec<_>>().join("/");
         if remainder.is_empty() {
@@ -95,9 +101,8 @@ fn resolve_target_dir(config: &Config, target: &str) -> PathBuf {
     std::process::exit(1);
 }
 
-fn pick_directory(config: &Config) -> PathBuf {
-    let root = config.root_path();
-    let dirs = numbering::scan_numbered_dirs(&root);
+fn pick_directory(config: &Config, root: &Path) -> PathBuf {
+    let dirs = numbering::scan_numbered_dirs(root);
 
     if dirs.is_empty() {
         eprintln!("No notez directories found. Create one with: notez mkdir <name>");
@@ -133,10 +138,16 @@ fn pick_directory(config: &Config) -> PathBuf {
         let selected = String::from_utf8(output.stdout).unwrap();
         let selected = selected.trim();
         let number: u8 = selected[..2].parse().expect("invalid selection");
-        let dir = dirs.iter().find(|d| d.number == number).expect("dir not found");
+        let dir = dirs
+            .iter()
+            .find(|d| d.number == number)
+            .expect("dir not found");
         root.join(&dir.full_name)
     } else {
-        let items: Vec<String> = dirs.iter().map(|d| format!("{:02}  {}", d.number, d.name)).collect();
+        let items: Vec<String> = dirs
+            .iter()
+            .map(|d| format!("{:02}  {}", d.number, d.name))
+            .collect();
         let selection = dialoguer::Select::new()
             .with_prompt("Select directory")
             .items(&items)
@@ -161,20 +172,31 @@ mod tests {
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.starts_with("# my-idea\n"));
         assert!(content.contains("Date: 2026-04-02"));
-        assert_eq!(path.file_name().unwrap().to_str().unwrap(), "2026-04-02-my-idea.md");
+        assert_eq!(
+            path.file_name().unwrap().to_str().unwrap(),
+            "2026-04-02-my-idea.md"
+        );
     }
 
     #[test]
     fn creates_note_with_default_title() {
         let dir = tempfile::tempdir().unwrap();
         let path = create_note_file(dir.path(), "2026-04-02", "untitled", None);
-        assert_eq!(path.file_name().unwrap().to_str().unwrap(), "2026-04-02-untitled.md");
+        assert_eq!(
+            path.file_name().unwrap().to_str().unwrap(),
+            "2026-04-02-untitled.md"
+        );
     }
 
     #[test]
     fn creates_note_with_body() {
         let dir = tempfile::tempdir().unwrap();
-        let path = create_note_file(dir.path(), "2026-04-02", "my-idea", Some("This is the note content"));
+        let path = create_note_file(
+            dir.path(),
+            "2026-04-02",
+            "my-idea",
+            Some("This is the note content"),
+        );
 
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("This is the note content"));

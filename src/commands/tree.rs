@@ -4,6 +4,7 @@ use std::path::Path;
 use crate::colors::Colors;
 use crate::config::Config;
 use crate::numbering;
+use crate::project;
 
 struct TreeData {
     numbered: Vec<TreeEntry>,
@@ -27,16 +28,27 @@ struct SubdirEntry {
 /// recursive subdirectory listings. Non-numbered directories appear
 /// below a divider.
 pub fn run_tree(global: bool) {
-    let _ = global;
     let config = Config::require();
-    let root = config.root_path();
+    let root = project::resolve_notez_dir(&config, global);
     let colors = Colors::new();
 
-    let display_root = config.notez_root.replacen(
-        &dirs::home_dir().unwrap().to_string_lossy().to_string(),
-        "~",
-        1,
-    );
+    let display_root = if global {
+        config.notez_root.replacen(
+            &dirs::home_dir().unwrap().to_string_lossy().to_string(),
+            "~",
+            1,
+        )
+    } else {
+        format!("./notez")
+    };
+
+    if !root.exists() {
+        println!(
+            "\n  {} No notez directory here.\n",
+            colors.overlay.apply_to("─")
+        );
+        return;
+    }
 
     let tree = collect_tree(&root);
 

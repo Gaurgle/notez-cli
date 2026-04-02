@@ -2,11 +2,11 @@ use std::process::Command;
 
 use crate::colors::Colors;
 use crate::config::Config;
+use crate::project;
 
 pub fn run_search(global: bool, term: String) {
-    let _ = global;
     let config = Config::require();
-    let root = config.root_path();
+    let root = project::resolve_notez_dir(&config, global);
     let colors = Colors::new();
 
     if config.has_rg && config.has_fzf {

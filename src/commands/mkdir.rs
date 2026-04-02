@@ -4,11 +4,11 @@ use std::path::Path;
 use crate::colors::Colors;
 use crate::config::Config;
 use crate::numbering;
+use crate::project;
 
 pub fn run_mkdir(global: bool, name_parts: Vec<String>) {
-    let _ = global;
     let config = Config::require();
-    let root = config.root_path();
+    let root = project::resolve_notez_dir(&config, global);
     let raw_name = name_parts.join(" ");
 
     if raw_name.is_empty() {
@@ -19,7 +19,9 @@ pub fn run_mkdir(global: bool, name_parts: Vec<String>) {
     let sanitized = numbering::sanitize_name(&raw_name);
     let colors = Colors::new();
 
-    // Show existing dirs to help user spot near-duplicates
+    // Ensure root exists
+    fs::create_dir_all(&root).expect("failed to create notez directory");
+
     let existing = numbering::scan_numbered_dirs(&root);
     if !existing.is_empty() {
         println!(
@@ -43,6 +45,12 @@ pub fn run_mkdir(global: bool, name_parts: Vec<String>) {
                 colors.green.apply_to("✓"),
                 colors.sapphire.apply_to(&full_name)
             );
+
+            if !global {
+                let created_dir = root.join(&full_name);
+                let home_dir = project::ensure_home_project_dir(&config);
+                project::mirror_dir_to_home(&created_dir, &home_dir);
+            }
         }
         Err(e) => {
             eprintln!("  {} {}", colors.peach.apply_to("✗"), e);

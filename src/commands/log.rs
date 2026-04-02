@@ -6,12 +6,17 @@ use chrono::Local;
 
 use crate::colors::Colors;
 use crate::config::Config;
+use crate::project;
 
 pub fn run_log(global: bool, message: Vec<String>) {
-    let _ = global;
     let config = Config::require();
-    let logs_path = config.daily_logs_path();
-    fs::create_dir_all(&logs_path).expect("failed to create daily logs directory");
+
+    let logs_dir = if global {
+        config.daily_logs_path()
+    } else {
+        project::local_notez_dir()
+    };
+    fs::create_dir_all(&logs_dir).expect("failed to create logs directory");
 
     let now = Local::now();
     let date = now.format("%Y-%m-%d").to_string();
@@ -23,7 +28,12 @@ pub fn run_log(global: bool, message: Vec<String>) {
         std::process::exit(1);
     }
 
-    append_log_entry(&logs_path, &date, &time, &msg);
+    let file_path = append_log_entry(&logs_dir, &date, &time, &msg);
+
+    if !global {
+        let home_dir = project::ensure_home_project_dir(&config);
+        project::mirror_file_to_home(&file_path, &home_dir);
+    }
 
     let colors = Colors::new();
     println!(
@@ -34,7 +44,7 @@ pub fn run_log(global: bool, message: Vec<String>) {
 }
 
 /// Append a timestamped entry to the daily log file, creating the file with a header if new.
-fn append_log_entry(dir: &Path, date: &str, time: &str, message: &str) {
+fn append_log_entry(dir: &Path, date: &str, time: &str, message: &str) -> std::path::PathBuf {
     let file_path = dir.join(format!("{}-daily-log.md", date));
     let is_new = !file_path.exists();
 
@@ -48,6 +58,8 @@ fn append_log_entry(dir: &Path, date: &str, time: &str, message: &str) {
         writeln!(file, "# Daily Log - {}\n", date).expect("failed to write header");
     }
     writeln!(file, "{} - {}", time, message).expect("failed to write log entry");
+
+    file_path
 }
 
 #[cfg(test)]
