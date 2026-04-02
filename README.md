@@ -101,13 +101,13 @@ Built-in shortcut subcommands:
 | `notez zlogs` | `notez logz` |
 | `notez znote [title]` | `notez add` |
 
-For even shorter access, add shell aliases:
+For even shorter access, add shell aliases (`noglob` prevents zsh from treating `?` `*` etc. as wildcards):
 
 ```bash
-alias zlog='notez zlog'
+alias zlog='noglob notez zlog'
 alias zlogs='notez zlogs'
 alias logz='notez logz'
-alias znote='notez znote'
+alias znote='noglob notez znote'
 ```
 
 ## Tab Completions
