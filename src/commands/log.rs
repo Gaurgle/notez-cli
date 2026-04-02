@@ -11,11 +11,7 @@ use crate::project;
 pub fn run_log(global: bool, message: Vec<String>) {
     let config = Config::require();
 
-    let logs_dir = if global {
-        config.daily_logs_path()
-    } else {
-        project::local_notez_dir()
-    };
+    let logs_dir = project::resolve_daily_logs_dir(&config, global);
     fs::create_dir_all(&logs_dir).expect("failed to create logs directory");
 
     let now = Local::now();
@@ -32,7 +28,7 @@ pub fn run_log(global: bool, message: Vec<String>) {
 
     if !global {
         let home_dir = project::ensure_home_project_dir(&config);
-        project::mirror_file_to_home(&file_path, &home_dir);
+        project::mirror_dir_to_home(&logs_dir, &home_dir);
     }
 
     let colors = Colors::new();

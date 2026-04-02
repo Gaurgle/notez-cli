@@ -26,11 +26,7 @@ pub fn run_browse(global: bool) {
 
 pub fn run_logz(global: bool) {
     let config = Config::require();
-    let dir = if global {
-        config.daily_logs_path()
-    } else {
-        project::local_notez_dir()
-    };
+    let dir = project::resolve_daily_logs_dir(&config, global);
 
     if !dir.exists() {
         std::fs::create_dir_all(&dir).expect("failed to create directory");

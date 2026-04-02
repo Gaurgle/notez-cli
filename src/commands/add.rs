@@ -19,14 +19,9 @@ pub fn run_add(global: bool, title: Option<String>, target: Option<String>, body
 
     let target_dir = match target {
         None => {
-            if global {
-                let dir = config.quick_notes_path();
-                fs::create_dir_all(&dir).expect("failed to create quick notes directory");
-                dir
-            } else {
-                fs::create_dir_all(&root).expect("failed to create local notez directory");
-                root.clone()
-            }
+            let dir = project::resolve_quick_notes_dir(&config, global);
+            fs::create_dir_all(&dir).expect("failed to create quick notes directory");
+            dir
         }
         Some(explicit) if !explicit.is_empty() => resolve_target_dir(&root, &explicit),
         Some(_) => pick_directory(&config, &root),
@@ -42,7 +37,7 @@ pub fn run_add(global: bool, title: Option<String>, target: Option<String>, body
 
     if !global {
         let home_dir = project::ensure_home_project_dir(&config);
-        project::mirror_file_to_home(&file_path, &home_dir);
+        project::mirror_dir_to_home(&target_dir, &home_dir);
     }
 
     if body.is_none() {

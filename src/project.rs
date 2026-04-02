@@ -45,6 +45,24 @@ pub fn resolve_notez_dir(config: &Config, global: bool) -> PathBuf {
     }
 }
 
+/// Resolve the quick notes directory (local or global).
+pub fn resolve_quick_notes_dir(config: &Config, global: bool) -> PathBuf {
+    if global {
+        config.quick_notes_path()
+    } else {
+        local_notez_dir().join(&config.quick_notes_dir)
+    }
+}
+
+/// Resolve the daily logs directory (local or global).
+pub fn resolve_daily_logs_dir(config: &Config, global: bool) -> PathBuf {
+    if global {
+        config.daily_logs_path()
+    } else {
+        local_notez_dir().join(&config.daily_logs_dir)
+    }
+}
+
 /// Ensure the project has a numbered directory in the home notez root.
 /// Returns the path to the project's home dir (e.g., ~/notez/02_my-project/).
 pub fn ensure_home_project_dir(config: &Config) -> PathBuf {
