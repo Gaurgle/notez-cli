@@ -1,13 +1,33 @@
 use std::fs;
+use std::io::{self, Write};
 use std::path::PathBuf;
 
-use dialoguer::{Confirm, Input, Select};
+use dialoguer::{Confirm, Select};
 
 use crate::colors::Colors;
 use crate::config::{Config, detect_tool, expand_tilde};
 use crate::numbering;
 
 const DIV_W: usize = 50;
+
+fn prompt_input(colors: &Colors, label: &str, default: &str) -> String {
+    print!(
+        "    {} {}: ",
+        colors.overlay.apply_to(label),
+        colors.surface.apply_to(format!("[{}]", default))
+    );
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    let input = input.trim();
+
+    if input.is_empty() {
+        default.to_string()
+    } else {
+        input.to_string()
+    }
+}
 
 fn step_header(colors: &Colors, step: usize, total: usize, title: &str) {
     println!();
@@ -113,18 +133,14 @@ pub fn run_setup() {
                 );
                 println!();
 
-                let input: String = Input::new()
-                    .with_prompt("    Folder path")
-                    .default(default_root.clone())
-                    .interact_text()
-                    .unwrap();
+                let input = prompt_input(&colors, "Folder path", &default_root);
 
-                if input.trim() == "b" {
+                if input == "b" {
                     step = 1;
                     continue;
                 }
 
-                root_dir = expand_tilde(input.trim());
+                root_dir = expand_tilde(&input);
                 let root_path = PathBuf::from(&root_dir);
 
                 if !root_path.exists() {
@@ -219,18 +235,14 @@ pub fn run_setup() {
                 );
                 println!();
 
-                let input: String = Input::new()
-                    .with_prompt("    Folder name")
-                    .default(default_quick.clone())
-                    .interact_text()
-                    .unwrap();
+                let input = prompt_input(&colors, "Folder name", &default_quick);
 
-                if input.trim() == "b" {
+                if input == "b" {
                     step = 3;
                     continue;
                 }
 
-                quick_name = format!("00_{}", numbering::sanitize_name(input.trim()));
+                quick_name = format!("00_{}", numbering::sanitize_name(&input));
                 println!(
                     "\n    {} Will create: {}",
                     colors.green.apply_to("✓"),
@@ -251,18 +263,14 @@ pub fn run_setup() {
                 );
                 println!();
 
-                let input: String = Input::new()
-                    .with_prompt("    Folder name")
-                    .default(default_daily.clone())
-                    .interact_text()
-                    .unwrap();
+                let input = prompt_input(&colors, "Folder name", &default_daily);
 
-                if input.trim() == "b" {
+                if input == "b" {
                     step = 4;
                     continue;
                 }
 
-                daily_name = format!("01_{}", numbering::sanitize_name(input.trim()));
+                daily_name = format!("01_{}", numbering::sanitize_name(&input));
                 println!(
                     "\n    {} Will create: {}",
                     colors.green.apply_to("✓"),
@@ -311,17 +319,13 @@ pub fn run_setup() {
                 if editor.is_empty() {
                     println!();
                     println!("    notez needs a text editor to open your notes.");
-                    let input: String = Input::new()
-                        .with_prompt("    Which editor would you like to use?")
-                        .default("vim".into())
-                        .interact_text()
-                        .unwrap();
+                    let input = prompt_input(&colors, "Editor", "vim");
 
-                    if input.trim() == "b" {
+                    if input == "b" {
                         step = 5;
                         continue;
                     }
-                    editor = input.trim().to_string();
+                    editor = input;
                 }
 
                 step = 7;
