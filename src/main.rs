@@ -18,7 +18,7 @@ enum Commands {
     /// Create a new note
     Add {
         /// Note title (defaults to "untitled")
-        title: Option<String>,
+        title: Vec<String>,
         /// Target directory (fzf picker if flag given without value)
         #[arg(long, num_args = 0..=1, default_missing_value = "")]
         r#in: Option<String>,
@@ -56,7 +56,7 @@ enum Commands {
     /// Quick new note (alias for add)
     Znote {
         /// Note title (defaults to "untitled")
-        title: Option<String>,
+        title: Vec<String>,
         /// Target directory
         #[arg(long, num_args = 0..=1, default_missing_value = "")]
         r#in: Option<String>,
@@ -68,7 +68,10 @@ fn main() {
 
     match cli.command {
         None => commands::browse::run_browse(),
-        Some(Commands::Add { title, r#in }) => commands::add::run_add(title, r#in),
+        Some(Commands::Add { title, r#in }) => {
+            let t = if title.is_empty() { None } else { Some(title.join(" ")) };
+            commands::add::run_add(t, r#in)
+        }
         Some(Commands::Log { message }) => commands::log::run_log(message),
         Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(),
         Some(Commands::Mkdir { name }) => commands::mkdir::run_mkdir(name),
@@ -77,6 +80,9 @@ fn main() {
         Some(Commands::Setup) => setup::run_setup(),
         Some(Commands::Zlog { message }) => commands::log::run_log(message),
         Some(Commands::Zlogs) => commands::browse::run_logz(),
-        Some(Commands::Znote { title, r#in }) => commands::add::run_add(title, r#in),
+        Some(Commands::Znote { title, r#in }) => {
+            let t = if title.is_empty() { None } else { Some(title.join(" ")) };
+            commands::add::run_add(t, r#in)
+        }
     }
 }
