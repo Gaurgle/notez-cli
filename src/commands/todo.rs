@@ -162,6 +162,11 @@ pub fn run_todo(global: bool, item: Option<String>) {
             fs::write(&path, serialize_todos_for_file(&items, &path))
                 .expect("failed to write TODO.md");
 
+            if !global {
+                let home_dir = project::ensure_home_project_dir(&config);
+                project::mirror_file_to_home(&path, &home_dir);
+            }
+
             let colors = Colors::new();
             let real_count = items.iter().filter(|i| !i.is_header).count();
             println!(
@@ -189,6 +194,9 @@ pub fn run_todo(global: bool, item: Option<String>) {
                 }
                 fs::write(&path, serialize_todos_for_file(&updated, &path))
                     .expect("failed to write TODO.md");
+
+                let home_dir = project::ensure_home_project_dir(&config);
+                project::mirror_file_to_home(&path, &home_dir);
             }
         }
     }
