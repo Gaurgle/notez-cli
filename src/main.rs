@@ -4,6 +4,7 @@ mod colors;
 mod commands;
 mod config;
 mod numbering;
+mod project;
 mod setup;
 
 #[derive(Parser)]
