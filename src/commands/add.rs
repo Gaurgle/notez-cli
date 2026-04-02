@@ -36,13 +36,15 @@ pub fn run_add(title: Option<String>, target: Option<String>, body: Option<Strin
         colors.sapphire.apply_to(file_path.file_name().unwrap().to_str().unwrap())
     );
 
-    Command::new(&config.editor)
-        .arg("+4")
-        .arg("-c")
-        .arg("startinsert")
-        .arg(&file_path)
-        .status()
-        .expect("failed to launch editor");
+    if body.is_none() {
+        Command::new(&config.editor)
+            .arg("+4")
+            .arg("-c")
+            .arg("startinsert")
+            .arg(&file_path)
+            .status()
+            .expect("failed to launch editor");
+    }
 }
 
 fn create_note_file(dir: &Path, date: &str, title: &str, body: Option<&str>) -> PathBuf {
