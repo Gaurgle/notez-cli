@@ -6,6 +6,7 @@ mod config;
 mod numbering;
 mod project;
 mod setup;
+mod tui;
 
 #[derive(Parser)]
 #[command(name = "notez", about = "A CLI note-taking tool", version)]
