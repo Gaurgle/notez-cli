@@ -65,7 +65,15 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str) {
 
         terminal
             .draw(|frame| {
-                let area = frame.area();
+                let full = frame.area();
+
+                // Margin from terminal edges
+                let area = Rect::new(
+                    full.x + 2,
+                    full.y + 1,
+                    full.width.saturating_sub(4),
+                    full.height.saturating_sub(2),
+                );
                 let inner_width = area.width.saturating_sub(6) as usize; // padding + borders + highlight
 
                 // Layout: main list + status bar
@@ -157,11 +165,11 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str) {
                         Span::styled(" ", Style::default()),
                         Span::styled("n", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
                         Span::styled("avigate  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("e", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
+                        Span::styled("e", Style::default().fg(theme::MAUVE).add_modifier(bold)),
                         Span::styled("xpand  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("o", Style::default().fg(theme::GREEN).add_modifier(bold)),
                         Span::styled("pen  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("q", Style::default().fg(theme::OVERLAY).add_modifier(bold)),
+                        Span::styled("q", Style::default().fg(theme::PEACH).add_modifier(bold)),
                         Span::styled("uit", Style::default().fg(theme::OVERLAY)),
                     ])
                 };

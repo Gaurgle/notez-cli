@@ -109,7 +109,14 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
     loop {
         terminal
             .draw(|frame| {
-                let area = frame.area();
+                let full = frame.area();
+
+                let area = Rect::new(
+                    full.x + 2,
+                    full.y + 1,
+                    full.width.saturating_sub(4),
+                    full.height.saturating_sub(2),
+                );
 
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
@@ -188,7 +195,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>) -> Vec<TodoItem> {
                         Span::styled("dit  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("d", Style::default().fg(theme::PEACH).add_modifier(bold)),
                         Span::styled("elete  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("q", Style::default().fg(theme::OVERLAY).add_modifier(bold)),
+                        Span::styled("q", Style::default().fg(theme::PEACH).add_modifier(bold)),
                         Span::styled("uit", Style::default().fg(theme::OVERLAY)),
                     ])
                 };
