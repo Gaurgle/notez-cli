@@ -237,10 +237,22 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     .iter()
                     .map(|item| {
                         if item.is_header {
+                            let real_path = fs::canonicalize(&item.source).unwrap_or(item.source.clone());
+                            let path_display = real_path.parent()
+                                .map(|p| {
+                                    let s = p.to_string_lossy().to_string();
+                                    let home = dirs::home_dir().unwrap().to_string_lossy().to_string();
+                                    s.replacen(&home, "~", 1)
+                                })
+                                .unwrap_or_default();
                             let line = Line::from(vec![
                                 Span::styled(
                                     format!("  ── {} ", item.text),
                                     Style::default().fg(theme::MAUVE).add_modifier(ratatui::style::Modifier::BOLD),
+                                ),
+                                Span::styled(
+                                    path_display,
+                                    Style::default().fg(theme::OVERLAY),
                                 ),
                             ]);
                             ListItem::new(line)
