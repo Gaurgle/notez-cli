@@ -56,6 +56,8 @@ enum Commands {
     Tree,
     /// Run the setup wizard
     Setup,
+    /// Create a demo project for screenshots
+    Demo,
     /// Quick log entry (alias for log)
     Zlog {
         /// Log message
@@ -255,6 +257,7 @@ fn main() {
         Some(Commands::Search { term }) => commands::search::run_search(cli.global, term),
         Some(Commands::Tree) => commands::tree::run_tree(cli.global),
         Some(Commands::Setup) => setup::run_setup(),
+        Some(Commands::Demo) => commands::demo::run_demo(),
         Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, message),
         Some(Commands::Zlogs) => commands::browse::run_logz(cli.global),
         Some(Commands::Completions { shell }) => commands::completions::run_completions(shell),
