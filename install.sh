@@ -31,8 +31,14 @@ mkdir -p "$INSTALL_DIR"
 cp target/release/notez "$INSTALL_DIR/notez"
 chmod +x "$INSTALL_DIR/notez"
 
+# Create symlinks for standalone commands
+for cmd in todoz zlog zlogs logz znote; do
+    ln -sf "$INSTALL_DIR/notez" "$INSTALL_DIR/$cmd"
+done
+
 echo ""
 echo "  ${GREEN}✓${RESET} installed to $INSTALL_DIR/notez"
+echo "  ${GREEN}✓${RESET} standalone commands: todoz, zlog, zlogs, logz, znote"
 
 # Check PATH
 if ! echo "$PATH" | tr ':' '\n' | grep -q "^$INSTALL_DIR$"; then

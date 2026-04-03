@@ -158,7 +158,6 @@ fn print_help() {
     println!("  {}", c.mauve.apply_to("Todos"));
     cmd("notez todo", "interactive todo manager");
     cmd("notez todo \"item\"", "quick-add a todo");
-    cmd("notez todoz", "alias for notez todo");
     println!();
 
     println!("  {}", c.mauve.apply_to("Browse & Organize"));
@@ -168,17 +167,13 @@ fn print_help() {
     cmd("notez mkdir <name>", "create a numbered subdirectory");
     println!();
 
-    println!("  {}", c.mauve.apply_to("Standalone shortcuts"));
-    println!(
-        "    {}",
-        c.overlay.apply_to("(add as shell aliases for quick access)")
-    );
+    println!("  {}", c.mauve.apply_to("Standalone commands"));
+    cmd("todoz", "interactive todo manager");
+    cmd("todoz -g", "todos from all projects");
     cmd("zlog <message>", "quick log entry");
     cmd("zlogs", "browse daily logs");
     cmd("logz", "browse daily logs");
     cmd("znote [title]", "create a note");
-    cmd("todoz", "interactive todo manager");
-    cmd("todoz -g", "todos from all projects");
     println!();
 
     println!("  {}", c.mauve.apply_to("Setup"));
@@ -232,6 +227,43 @@ fn print_help() {
 }
 
 fn main() {
+    // Check if invoked via symlink (e.g., todoz, zlog, znote)
+    let argv0 = std::env::args().next().unwrap_or_default();
+    let bin_name = std::path::Path::new(&argv0)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+
+    if bin_name != "notez" {
+        // Rewrite args: "todoz -g foo" → "notez todoz -g foo"
+        let extra_args: Vec<String> = std::env::args().skip(1).collect();
+        let mut new_args = vec!["notez".to_string(), bin_name];
+        new_args.extend(extra_args);
+        let cli = Cli::parse_from(&new_args);
+
+        if cli.help {
+            print_help();
+            return;
+        }
+
+        match cli.command {
+            Some(Commands::Todoz) => commands::todo::run_todo(cli.global, None),
+            Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, item),
+            Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, message),
+            Some(Commands::Zlogs) => commands::browse::run_logz(cli.global),
+            Some(Commands::Logs) => commands::browse::run_logz(cli.global),
+            Some(Commands::Znote { title, r#in }) => {
+                let (t, body) = split_title_body(title);
+                commands::add::run_add(cli.global, t, r#in, body)
+            }
+            _ => {
+                print_help();
+            }
+        }
+        return;
+    }
+
     let cli = Cli::parse();
 
     if cli.help {
