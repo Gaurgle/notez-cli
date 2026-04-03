@@ -200,9 +200,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
     let mut terminal = tui::enter().expect("failed to enter TUI");
     let mut state = ListState::default();
     if !items.is_empty() {
-        // Select first non-header item
-        let first = items.iter().position(|i| !i.is_header).unwrap_or(0);
-        state.select(Some(first));
+        state.select(Some(0));
     }
     let mut vim = VimCommandMode::new();
     let mut input_mode = false;
@@ -460,23 +458,13 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                 KeyCode::Char('q') | KeyCode::Esc => break,
 
                 KeyCode::Char('j') | KeyCode::Down => {
-                    if !items.is_empty() {
-                        // Skip headers when navigating
-                        let mut next = selected + 1;
-                        while next < items.len() && items[next].is_header {
-                            next += 1;
-                        }
-                        if next < items.len() {
-                            state.select(Some(next));
-                        }
+                    if !items.is_empty() && selected + 1 < items.len() {
+                        state.select(Some(selected + 1));
                     }
                 }
                 KeyCode::Char('k') | KeyCode::Up => {
                     if selected > 0 {
-                        let mut prev = selected - 1;
-                        while prev > 0 && items[prev].is_header {
-                            prev -= 1;
-                        }
+                        let prev = selected - 1;
                         if !items[prev].is_header {
                             state.select(Some(prev));
                         }
