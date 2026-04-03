@@ -194,53 +194,27 @@ fn print_help() {
     println!("  {}", div);
     println!();
 
-    // Helper: print a colored string padded to `w` visible characters
-    let col = |text: &str, style: &console::Style, w: usize| -> String {
-        let pad = w.saturating_sub(text.len());
-        format!("{}{}", style.apply_to(text), " ".repeat(pad))
+    let key = |k: &str, ks: &console::Style, desc: &str| {
+        let pad = 5usize.saturating_sub(k.len());
+        println!("    {}{}  {}", ks.apply_to(k), " ".repeat(pad), c.overlay.apply_to(desc));
     };
 
-    let w = 10;
     println!("  {}", c.mauve.apply_to("Todo keys"));
-    println!(
-        "    {}{}{}{}{}{}{}{}",
-        col("x", &c.sapphire, w),
-        col("a", &c.yellow, w),
-        col("n", &c.green, w),
-        col("s", &c.lavender, w),
-        col("e", &c.mauve, w),
-        col("d", &c.peach, w),
-        col("h/l", &c.overlay, w),
-        c.peach.apply_to("q"),
-    );
-    println!(
-        "    {}{}{}{}{}{}{}{}",
-        col("check", &c.overlay, w),
-        col("almost", &c.overlay, w),
-        col("new", &c.overlay, w),
-        col("subtask", &c.overlay, w),
-        col("edit", &c.overlay, w),
-        col("delete", &c.overlay, w),
-        col("fold", &c.overlay, w),
-        c.overlay.apply_to("quit"),
-    );
+    key("x", &c.sapphire, "check");
+    key("a", &c.yellow, "almost");
+    key("n", &c.green, "new");
+    key("s", &c.lavender, "subtask");
+    key("e", &c.mauve, "edit");
+    key("d", &c.peach, "delete");
+    key("h/l", &c.overlay, "fold");
+    key("q", &c.peach, "quit");
     println!();
 
     println!("  {}", c.mauve.apply_to("Tree keys"));
-    println!(
-        "    {}{}{}{}",
-        col("j/k", &c.sapphire, w),
-        col("h/l", &c.mauve, w),
-        col("o", &c.green, w),
-        c.peach.apply_to("q"),
-    );
-    println!(
-        "    {}{}{}{}",
-        col("move", &c.overlay, w),
-        col("fold", &c.overlay, w),
-        col("open", &c.overlay, w),
-        c.overlay.apply_to("quit"),
-    );
+    key("j/k", &c.sapphire, "move");
+    key("h/l", &c.mauve, "fold");
+    key("o", &c.green, "open");
+    key("q", &c.peach, "quit");
     println!();
 }
 
