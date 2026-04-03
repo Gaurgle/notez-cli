@@ -187,3 +187,7 @@ autoload -Uz compinit && compinit
 ## Config
 
 Stored at `~/.config/notez/config`. Project mappings at `~/.config/notez/projects`. Re-run `notez setup` to reconfigure.
+
+## Also
+
+Check out [repoz](https://github.com/Gaurgle/repoz) — see which repos need pulling, pushing, or have uncommitted work. One command.
