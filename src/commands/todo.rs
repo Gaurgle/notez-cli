@@ -28,6 +28,7 @@ struct TodoItem {
     is_header: bool,
     is_subtask: bool,
     has_subtasks: bool,
+    collapsed: bool,
 }
 
 // --- Parsing ---
@@ -92,6 +93,7 @@ fn load_single_todo(path: &Path, project_name: &str) -> Vec<TodoItem> {
             is_header: false,
             is_subtask: is_sub,
             has_subtasks: false,
+            collapsed: false,
         });
     }
 
@@ -148,6 +150,7 @@ fn load_local_todos(config: &Config) -> Vec<TodoItem> {
         is_header: true,
         is_subtask: false,
         has_subtasks: false,
+        collapsed: false,
     }];
     result.extend(load_single_todo(&path, &result[0].project));
     result
@@ -186,6 +189,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
             is_header: true,
             is_subtask: false,
             has_subtasks: false,
+            collapsed: false,
         });
         all_items.extend(items);
     }
@@ -201,6 +205,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         is_header: true,
         is_subtask: false,
         has_subtasks: false,
+        collapsed: false,
     }];
     result.extend(global_items);
     result.extend(all_items);
@@ -250,6 +255,7 @@ pub fn run_todo(global: bool, item: Option<String>) {
                 is_header: false,
                 is_subtask: false,
                 has_subtasks: false,
+                collapsed: false,
             });
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).ok();
@@ -297,6 +303,24 @@ pub fn run_todo(global: bool, item: Option<String>) {
 
 // --- TUI ---
 
+/// Get indices of visible items (skip subtasks of collapsed parents).
+fn get_visible_indices(items: &[TodoItem]) -> Vec<usize> {
+    let mut visible = Vec::new();
+    let mut skip_subtasks = false;
+
+    for (i, item) in items.iter().enumerate() {
+        if item.is_subtask {
+            if !skip_subtasks {
+                visible.push(i);
+            }
+        } else {
+            skip_subtasks = item.has_subtasks && item.collapsed;
+            visible.push(i);
+        }
+    }
+    visible
+}
+
 fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
     let mut terminal = tui::enter().expect("failed to enter TUI");
     let mut state = ListState::default();
@@ -330,9 +354,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     .constraints([Constraint::Min(1), Constraint::Length(1)])
                     .split(area);
 
-                let list_items: Vec<ListItem> = items
+                let visible = get_visible_indices(&items);
+                let list_items: Vec<ListItem> = visible
                     .iter()
-                    .map(|item| {
+                    .map(|&idx| {
+                        let item = &items[idx];
                         if item.is_header {
                             let real_path = fs::canonicalize(&item.source).unwrap_or(item.source.clone());
                             let path_display = real_path.parent()
@@ -350,7 +376,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                                 Span::styled(path_display, Style::default().fg(theme::OVERLAY)),
                             ]))
                         } else {
-                            let indent = if item.is_subtask { "      " } else { "    " };
+                            let indent = if item.is_subtask { "        " } else { "    " };
+                            let collapse_icon = if item.has_subtasks {
+                                if item.collapsed { "▶ " } else { "▼ " }
+                            } else {
+                                ""
+                            };
                             let (checkbox, style) = match item.state {
                                 CheckState::Checked => (
                                     "[x] ",
@@ -372,6 +403,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                             };
                             ListItem::new(Line::from(vec![
                                 Span::styled(indent, Style::default()),
+                                Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)),
                                 Span::styled(checkbox, Style::default().fg(checkbox_color)),
                                 Span::styled(item.text.clone(), style),
                             ]))
@@ -420,6 +452,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     Line::from(vec![
                         Span::styled(label, Style::default().fg(theme::MAUVE)),
                         Span::styled(input_buffer.as_str(), Style::default().fg(theme::TEXT)),
+                        Span::styled("▏", Style::default().fg(theme::SAPPHIRE)),
                     ])
                 } else if vim.active {
                     Line::from(vec![
@@ -460,20 +493,22 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
             if confirm_delete {
                 match key.code {
                     KeyCode::Char('y') | KeyCode::Enter => {
-                        let selected = state.selected().unwrap_or(0);
-                        if selected < items.len() && !items[selected].is_header {
-                            // If deleting a parent with subtasks, delete subtasks too
-                            if items[selected].has_subtasks {
-                                let mut end = selected + 1;
+                        let vis = get_visible_indices(&items);
+                        let vs = state.selected().unwrap_or(0);
+                        let ri = vis.get(vs).copied().unwrap_or(0);
+                        if ri < items.len() && !items[ri].is_header {
+                            if items[ri].has_subtasks {
+                                let mut end = ri + 1;
                                 while end < items.len() && items[end].is_subtask {
                                     end += 1;
                                 }
-                                items.drain(selected..end);
+                                items.drain(ri..end);
                             } else {
-                                items.remove(selected);
+                                items.remove(ri);
                             }
-                            if selected >= items.len() && !items.is_empty() {
-                                state.select(Some(items.len() - 1));
+                            let new_vis = get_visible_indices(&items);
+                            if vs >= new_vis.len() && !new_vis.is_empty() {
+                                state.select(Some(new_vis.len() - 1));
                             }
                         }
                         confirm_delete = false;
@@ -488,9 +523,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                 match key.code {
                     KeyCode::Enter => {
                         if !input_buffer.is_empty() {
-                            let selected = state.selected().unwrap_or(0);
-                            let (source, project) = find_section(&items, selected);
-                            let mut insert_at = selected + 1;
+                            let vis = get_visible_indices(&items);
+                            let vs = state.selected().unwrap_or(0);
+                            let ri = vis.get(vs).copied().unwrap_or(0);
+                            let (source, project) = find_section(&items, ri);
+                            let mut insert_at = ri + 1;
                             while insert_at < items.len() && !items[insert_at].is_header {
                                 insert_at += 1;
                             }
@@ -502,8 +539,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                                 is_header: false,
                                 is_subtask: false,
                                 has_subtasks: false,
+                                collapsed: false,
                             });
-                            state.select(Some(insert_at));
+                            let new_vis = get_visible_indices(&items);
+                            if let Some(pos) = new_vis.iter().position(|&i| i == insert_at) {
+                                state.select(Some(pos));
+                            }
                         }
                         input_buffer.clear();
                         input_mode = false;
@@ -521,12 +562,13 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                 match key.code {
                     KeyCode::Enter => {
                         if !input_buffer.is_empty() {
-                            let selected = state.selected().unwrap_or(0);
-                            // Find the parent (current item if it's a task, or walk back from subtask)
-                            let parent_idx = if items[selected].is_subtask {
-                                (0..selected).rev().find(|&i| !items[i].is_subtask && !items[i].is_header).unwrap_or(selected)
-                            } else if !items[selected].is_header {
-                                selected
+                            let vis = get_visible_indices(&items);
+                            let vs = state.selected().unwrap_or(0);
+                            let ri = vis.get(vs).copied().unwrap_or(0);
+                            let parent_idx = if items[ri].is_subtask {
+                                (0..ri).rev().find(|&i| !items[i].is_subtask && !items[i].is_header).unwrap_or(ri)
+                            } else if !items[ri].is_header {
+                                ri
                             } else {
                                 // Can't add subtask to header
                                 input_buffer.clear();
@@ -552,8 +594,14 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                                 is_header: false,
                                 is_subtask: true,
                                 has_subtasks: false,
+                                collapsed: false,
                             });
-                            state.select(Some(insert_at));
+                            // Expand parent if collapsed
+                            items[parent_idx].collapsed = false;
+                            let new_vis = get_visible_indices(&items);
+                            if let Some(pos) = new_vis.iter().position(|&i| i == insert_at) {
+                                state.select(Some(pos));
+                            }
                         }
                         input_buffer.clear();
                         subtask_mode = false;
@@ -591,28 +639,40 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
             }
             if vim.active { continue; }
 
-            let selected = state.selected().unwrap_or(0);
+            let visible = get_visible_indices(&items);
+            let vis_sel = state.selected().unwrap_or(0);
+            let real_idx = visible.get(vis_sel).copied().unwrap_or(0);
 
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => break,
 
                 KeyCode::Char('j') | KeyCode::Down => {
-                    if !items.is_empty() && selected + 1 < items.len() {
-                        state.select(Some(selected + 1));
+                    if vis_sel + 1 < visible.len() {
+                        state.select(Some(vis_sel + 1));
                     }
                 }
                 KeyCode::Char('k') | KeyCode::Up => {
-                    if selected > 0 {
-                        state.select(Some(selected - 1));
+                    if vis_sel > 0 {
+                        state.select(Some(vis_sel - 1));
+                    }
+                }
+
+                KeyCode::Char('l') | KeyCode::Right => {
+                    if real_idx < items.len() && items[real_idx].has_subtasks && items[real_idx].collapsed {
+                        items[real_idx].collapsed = false;
+                    }
+                }
+                KeyCode::Char('h') | KeyCode::Left => {
+                    if real_idx < items.len() && items[real_idx].has_subtasks && !items[real_idx].collapsed {
+                        items[real_idx].collapsed = true;
                     }
                 }
 
                 KeyCode::Char(' ') | KeyCode::Char('x') | KeyCode::Enter => {
-                    if selected < items.len() && !items[selected].is_header {
-                        if items[selected].has_subtasks {
-                            // Toggle all subtasks — parent state is then derived
+                    if real_idx < items.len() && !items[real_idx].is_header {
+                        if items[real_idx].has_subtasks {
                             let all_checked = {
-                                let mut j = selected + 1;
+                                let mut j = real_idx + 1;
                                 let mut all = true;
                                 while j < items.len() && items[j].is_subtask {
                                     if items[j].state != CheckState::Checked { all = false; }
@@ -621,13 +681,13 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                                 all
                             };
                             let new_state = if all_checked { CheckState::Unchecked } else { CheckState::Checked };
-                            let mut j = selected + 1;
+                            let mut j = real_idx + 1;
                             while j < items.len() && items[j].is_subtask {
                                 items[j].state = new_state.clone();
                                 j += 1;
                             }
                         } else {
-                            items[selected].state = match items[selected].state {
+                            items[real_idx].state = match items[real_idx].state {
                                 CheckState::Unchecked => CheckState::Checked,
                                 CheckState::Checked => CheckState::Unchecked,
                                 CheckState::Half => CheckState::Checked,
@@ -637,37 +697,37 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                 }
 
                 KeyCode::Char('/') => {
-                    if selected < items.len() && !items[selected].is_header && !items[selected].has_subtasks {
-                        items[selected].state = match items[selected].state {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].has_subtasks {
+                        items[real_idx].state = match items[real_idx].state {
                             CheckState::Half => CheckState::Unchecked,
                             _ => CheckState::Half,
                         };
                     }
                 }
 
-                KeyCode::Char('n') | KeyCode::Char('a') => {
+                KeyCode::Char('n') => {
                     input_mode = true;
                     input_buffer.clear();
                 }
 
                 KeyCode::Char('s') => {
-                    if selected < items.len() && !items[selected].is_header {
+                    if real_idx < items.len() && !items[real_idx].is_header {
                         subtask_mode = true;
                         input_buffer.clear();
                     }
                 }
 
                 KeyCode::Char('d') => {
-                    if selected < items.len() && !items[selected].is_header {
+                    if real_idx < items.len() && !items[real_idx].is_header {
                         confirm_delete = true;
                     }
                 }
 
                 KeyCode::Char('e') => {
-                    if selected < items.len() && !items[selected].is_header {
+                    if real_idx < items.len() && !items[real_idx].is_header {
                         edit_mode = true;
-                        edit_idx = selected;
-                        input_buffer = items[selected].text.clone();
+                        edit_idx = real_idx;
+                        input_buffer = items[real_idx].text.clone();
                     }
                 }
 
@@ -724,9 +784,9 @@ mod tests {
     fn derive_parent_from_subtasks() {
         let source = PathBuf::from("/tmp/TODO.md");
         let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false },
+            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
+            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
         ];
         derive_parent_states(&mut items);
         assert_eq!(items[0].state, CheckState::Half); // 1 of 2 done
@@ -736,9 +796,9 @@ mod tests {
     fn derive_parent_all_done() {
         let source = PathBuf::from("/tmp/TODO.md");
         let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false },
+            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
+            TodoItem { text: "sub2".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
         ];
         derive_parent_states(&mut items);
         assert_eq!(items[0].state, CheckState::Checked); // all done
@@ -748,9 +808,9 @@ mod tests {
     fn serialize_with_subtasks() {
         let source = PathBuf::from("/tmp/TODO.md");
         let items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Half, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false },
+            TodoItem { text: "parent".into(), state: CheckState::Half, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
+            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
         ];
         let md = serialize_todos_for_file(&items, &source);
         assert!(md.contains("- [/] parent"));
@@ -768,8 +828,8 @@ mod tests {
     fn roundtrip_preserves_items() {
         let source = PathBuf::from("/tmp/test/TODO.md");
         let items = vec![
-            TodoItem { text: "buy milk".into(), state: CheckState::Unchecked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false },
-            TodoItem { text: "fix bug".into(), state: CheckState::Checked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false },
+            TodoItem { text: "buy milk".into(), state: CheckState::Unchecked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false, collapsed: false },
+            TodoItem { text: "fix bug".into(), state: CheckState::Checked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false, collapsed: false },
         ];
         let md = serialize_todos_for_file(&items, &source);
         let parsed = parse_todos_from_content(&md);
