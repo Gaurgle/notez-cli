@@ -30,7 +30,7 @@ A friendly step-by-step wizard that configures your home notes folder, directory
 
 **Home mirror:** Every local note is symlinked into `~/notez/` under a project directory (auto-created, named after your git repo). Browse all your notes from one place.
 
-**Global mode:** Use `-g` to target `~/notez/` directly for notes that aren't tied to a project.
+**Global mode:** Use `-g` before the subcommand to target `~/notez/` directly for notes that aren't tied to a project.
 
 ```
 ~/Repos/my-project/
@@ -40,6 +40,7 @@ A friendly step-by-step wizard that configures your home notes folder, directory
     01_daily-logs/                  ← notez log
       2026-04-02-daily-log.md
     02_research/                    ← notez mkdir
+    TODO.md                         ← notez todo
 
 ~/notez/                            ← unified home view
   00_quick-notes/                   ← global quick notes (-g)
@@ -48,11 +49,13 @@ A friendly step-by-step wizard that configures your home notes folder, directory
     00_quick-notes/               → ~/Repos/my-project/notez/00_quick-notes/
     01_daily-logs/                → ~/Repos/my-project/notez/01_daily-logs/
     02_research/                  → ~/Repos/my-project/notez/02_research/
+    TODO.md                       → ~/Repos/my-project/notez/TODO.md
+  TODO.md                           ← global todos (-g)
 ```
 
 ## Commands
 
-All commands default to the local `./notez/` directory. Add `-g` for global `~/notez/`.
+All commands default to the local `./notez/` directory. Use `-g` before the subcommand for global `~/notez/`.
 
 ### Notes
 
@@ -60,8 +63,9 @@ All commands default to the local `./notez/` directory. Add `-g` for global `~/n
 |---|---|
 | `notez add [title]` | Create a note and open in editor |
 | `notez add [title] "body text"` | Create a note with content (no editor) |
-| `notez add [title] --in` | Create a note in a specific subdirectory (fzf picker) |
+| `notez add [title] --in` | Create a note in a subdirectory (fzf picker) |
 | `notez add [title] --in dir` | Create a note in a named subdirectory |
+| `notez edit [term]` | Open an existing note (fuzzy search / fzf picker) |
 
 Multi-word titles work without quotes: `notez add my cool idea`
 
@@ -70,44 +74,63 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | Command | Description |
 |---|---|
 | `notez log <message>` | Append a timestamped entry to today's log |
-| `notez logz` | Browse daily logs |
-| `notez logs` | Alias for `logz` |
-
-### Browsing & Search
-
-| Command | Description |
-|---|---|
-| `notez` | Browse local notes in yazi |
-| `notez tree` | Interactive tree navigator (vim keys, Enter to open) |
-| `notez edit [term]` | Open an existing note (fuzzy search / fzf picker) |
-| `notez search <term>` | Search note content with rg + fzf |
+| `notez logz` / `notez logs` | Browse daily logs |
 
 ### Todos
 
 | Command | Description |
 |---|---|
-| `notez todo` | Interactive todo manager (vim keys, space/x to toggle) |
+| `notez todo` | Interactive todo manager |
 | `notez todo "item"` | Quick-add a todo item |
 | `notez todoz` | Alias for `notez todo` |
-| `notez todo -g` | View all todos across every project |
+| `notez -g todo` | View all todos across every project, grouped |
 
-### Organization
+**Todo keybindings:**
+
+| Key | Action |
+|---|---|
+| `x` / `space` / `Enter` | Check/uncheck (on parent: toggles all subtasks) |
+| `a` / `/` | Almost done `[/]` |
+| `n` | New todo |
+| `s` | Add subtask |
+| `e` | Edit text |
+| `d` | Delete (y/n confirm) |
+| `h` / `l` | Collapse / expand subtasks |
+| `j` / `k` | Navigate |
+| `q` / `Esc` / `Ctrl+C` / `:wq` | Quit |
+
+**Todo states:** `[ ]` unchecked → `[/]` almost done → `[x]` checked
+
+**Subtasks:** One level deep. Parent state auto-derived from subtask completion.
+
+### Browse & Organize
 
 | Command | Description |
 |---|---|
-| `notez mkdir <name>` | Create a new numbered subdirectory |
-| `notez setup` | Run the setup wizard |
-| `notez completions <shell>` | Generate shell completions (zsh, bash, fish) |
+| `notez` | Browse notes in yazi |
+| `notez tree` | Interactive tree navigator |
+| `notez search <term>` | Search note content (rg + fzf) |
+| `notez mkdir <name>` | Create a numbered subdirectory |
+
+**Tree keybindings:**
+
+| Key | Action |
+|---|---|
+| `j` / `k` | Navigate |
+| `l` / `→` | Expand directory |
+| `h` / `←` | Collapse / go to parent |
+| `o` / `Enter` | Open file in editor |
+| `q` / `Esc` / `Ctrl+C` / `:wq` | Quit |
 
 ### Global Mode
 
-Add `-g` before or after any command to target `~/notez/` instead of `./notez/`:
+Use `-g` **before** the subcommand:
 
 ```bash
 notez -g add personal thought       # → ~/notez/00_quick-notes/
 notez -g log "reminder for later"   # → ~/notez/01_daily-logs/
 notez -g tree                       # shows all projects
-notez -g todo                       # todos from every project, grouped with paths
+notez -g todo                       # todos from every project
 ```
 
 ### Shortcuts
@@ -121,7 +144,7 @@ Built-in shortcut subcommands:
 | `notez znote [title]` | `notez add` |
 | `notez todoz` | `notez todo` |
 
-For even shorter access, add shell aliases (`noglob` prevents zsh from treating `?` `*` etc. as wildcards):
+For standalone access, add shell aliases (`noglob` prevents zsh glob expansion on `?` `*` etc.):
 
 ```bash
 alias zlog='noglob notez zlog'
@@ -131,16 +154,22 @@ alias znote='noglob notez znote'
 alias todoz='notez todoz'
 ```
 
-## Tab Completions
+### Setup & Config
 
-Generate and install zsh completions:
+| Command | Description |
+|---|---|
+| `notez setup` | Interactive setup wizard |
+| `notez completions <shell>` | Generate shell completions (zsh, bash, fish) |
+| `notez -h` | Styled help with keybinding reference |
+
+## Tab Completions
 
 ```bash
 mkdir -p ~/.zfunc
 notez completions zsh > ~/.zfunc/_notez
 ```
 
-Add to your `.zshrc` (if not already there):
+Add to `.zshrc`:
 ```bash
 fpath=(~/.zfunc $fpath)
 autoload -Uz compinit && compinit

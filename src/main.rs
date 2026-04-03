@@ -153,22 +153,24 @@ fn print_help() {
     cmd("notez logz / logs", "browse daily logs");
     println!();
 
-    println!("  {}", c.mauve.apply_to("Organize"));
-    cmd("notez tree", "interactive tree navigator");
+    println!("  {}", c.mauve.apply_to("Todos"));
     cmd("notez todo", "interactive todo manager");
     cmd("notez todo \"item\"", "quick-add a todo");
-    cmd("notez mkdir <name>", "create a numbered subdirectory");
+    cmd("notez todoz", "alias for notez todo");
     println!();
 
-    println!("  {}", c.mauve.apply_to("Browse & Search"));
+    println!("  {}", c.mauve.apply_to("Browse & Organize"));
     cmd("notez", "browse notes in yazi");
+    cmd("notez tree", "interactive tree navigator");
     cmd("notez search <term>", "search note content (rg + fzf)");
+    cmd("notez mkdir <name>", "create a numbered subdirectory");
     println!();
 
     println!("  {}", c.mauve.apply_to("Shortcuts"));
     cmd("notez zlog <message>", "same as notez log");
     cmd("notez zlogs", "same as notez logz");
     cmd("notez znote [title]", "same as notez add");
+    cmd("notez todoz", "same as notez todo");
     println!();
 
     println!("  {}", c.mauve.apply_to("Setup"));
@@ -178,16 +180,58 @@ fn print_help() {
 
     println!("  {}", div);
     println!(
-        "  {}  {}",
-        c.overlay.apply_to("-g"),
-        c.overlay.apply_to("add before any command for global ~/notez/")
+        "  {}    {}",
+        c.sapphire.apply_to("-g"),
+        c.overlay.apply_to("use before subcommand for global ~/notez/")
     );
     println!(
-        "  {}  {}",
-        c.overlay.apply_to("-h"),
+        "  {}    {}",
+        c.sapphire.apply_to("-h"),
         c.overlay.apply_to("show this help")
     );
     println!("  {}", div);
+    println!();
+
+    println!("  {}", c.mauve.apply_to("Todo keys"));
+    println!(
+        "    {}  {}  {}  {}  {}  {}  {}  {}",
+        c.sapphire.apply_to("x"),
+        c.yellow.apply_to("a"),
+        c.green.apply_to("n"),
+        c.lavender.apply_to("s"),
+        c.mauve.apply_to("e"),
+        c.peach.apply_to("d"),
+        c.overlay.apply_to("h/l"),
+        c.peach.apply_to("q"),
+    );
+    println!(
+        "    {}  {}  {}  {}  {}  {}  {}  {}",
+        c.overlay.apply_to("check"),
+        c.overlay.apply_to("almost"),
+        c.overlay.apply_to("new"),
+        c.overlay.apply_to("subtask"),
+        c.overlay.apply_to("edit"),
+        c.overlay.apply_to("delete"),
+        c.overlay.apply_to("fold"),
+        c.overlay.apply_to("quit"),
+    );
+    println!();
+
+    println!("  {}", c.mauve.apply_to("Tree keys"));
+    println!(
+        "    {}  {}  {}  {}",
+        c.sapphire.apply_to("j/k"),
+        c.mauve.apply_to("h/l"),
+        c.green.apply_to("o"),
+        c.peach.apply_to("q"),
+    );
+    println!(
+        "    {}  {}  {}  {}",
+        c.overlay.apply_to("move"),
+        c.overlay.apply_to("fold"),
+        c.overlay.apply_to("open"),
+        c.overlay.apply_to("quit"),
+    );
     println!();
 }
 
