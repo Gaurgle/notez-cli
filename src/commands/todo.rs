@@ -251,7 +251,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                             ListItem::new(line)
                         } else if item.checked {
                             let line = Line::from(vec![
-                                Span::styled("  [x] ", Style::default().fg(theme::SURFACE)),
+                                Span::styled("    [x] ", Style::default().fg(theme::SURFACE)),
                                 Span::styled(
                                     item.text.clone(),
                                     Style::default()
@@ -262,7 +262,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                             ListItem::new(line)
                         } else {
                             let line = Line::from(vec![
-                                Span::styled("  [ ] ", Style::default().fg(theme::SAPPHIRE)),
+                                Span::styled("    [ ] ", Style::default().fg(theme::SAPPHIRE)),
                                 Span::styled(item.text.clone(), Style::default().fg(theme::TEXT)),
                             ]);
                             ListItem::new(line)
@@ -317,18 +317,23 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     ])
                 } else {
                     let bold = ratatui::style::Modifier::BOLD;
+                    let width = chunks[1].width as usize;
+                    let left = format!(" xheck  new  edit  delete");
+                    let right = "quit ";
+                    let padding = width.saturating_sub(left.len() + right.len());
                     Line::from(vec![
                         Span::styled(" ", Style::default()),
                         Span::styled("x", Style::default().fg(theme::GREEN).add_modifier(bold)),
-                        Span::styled(" check  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("a", Style::default().fg(theme::GREEN).add_modifier(bold)),
-                        Span::styled("dd  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("heck  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("n", Style::default().fg(theme::GREEN).add_modifier(bold)),
+                        Span::styled("ew  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("e", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
                         Span::styled("dit  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("d", Style::default().fg(theme::PEACH).add_modifier(bold)),
-                        Span::styled("elete  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("q", Style::default().fg(theme::PEACH).add_modifier(bold)),
-                        Span::styled("uit", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("elete", Style::default().fg(theme::OVERLAY)),
+                        Span::styled(" ".repeat(padding), Style::default()),
+                        Span::styled("q", Style::default().fg(theme::OVERLAY).add_modifier(bold)),
+                        Span::styled("uit ", Style::default().fg(theme::OVERLAY)),
                     ])
                 };
                 frame.render_widget(Paragraph::new(status), chunks[1]);
@@ -477,7 +482,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     }
                 }
 
-                KeyCode::Char('a') => {
+                KeyCode::Char('n') | KeyCode::Char('a') => {
                     input_mode = true;
                     input_buffer.clear();
                 }
