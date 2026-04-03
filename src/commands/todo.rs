@@ -277,12 +277,14 @@ pub fn run_todo(global: bool, item: Option<String>) {
             );
         }
         None => {
-            let items = if global {
-                load_global_todos(&config)
+            let (items, tui_title) = if global {
+                (load_global_todos(&config), "todoz (global)".to_string())
             } else {
-                load_local_todos(&config)
+                let cwd = std::env::current_dir().unwrap_or_default();
+                let name = project::detect_project_name(&cwd);
+                (load_local_todos(&config), format!("todoz ({})", name))
             };
-            let updated = run_todo_tui(items, global);
+            let updated = run_todo_tui(items, global, &tui_title);
             if global {
                 save_all_todos(&updated);
             } else {
@@ -321,7 +323,7 @@ fn get_visible_indices(items: &[TodoItem]) -> Vec<usize> {
     visible
 }
 
-fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
+fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<TodoItem> {
     let mut terminal = tui::enter().expect("failed to enter TUI");
     let mut state = ListState::default();
     if !items.is_empty() {
@@ -415,9 +417,8 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                 let todo_count = items.iter().filter(|i| !i.is_header && !i.is_subtask && i.state != CheckState::Checked).count();
                 let done_count = items.iter().filter(|i| !i.is_header && !i.is_subtask && i.state == CheckState::Checked).count();
 
-                let title_label = if global { "TODO (all projects)" } else { "TODO" };
                 let title = Line::from(vec![
-                    Span::styled(format!(" {} ", title_label), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
+                    Span::styled(format!(" {} ", tui_title), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
                     Span::styled("— ", Style::default().fg(theme::SURFACE)),
                     Span::styled(format!("{} pending", todo_count), Style::default().fg(theme::SAPPHIRE)),
                     Span::styled(" · ", Style::default().fg(theme::SURFACE)),

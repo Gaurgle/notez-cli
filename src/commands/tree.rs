@@ -41,17 +41,20 @@ pub fn run_tree(global: bool) {
         return;
     }
 
-    let display_root = if global {
-        config.notez_root.replacen(
+    let title = if global {
+        let path = config.notez_root.replacen(
             &dirs::home_dir().unwrap().to_string_lossy().to_string(),
             "~",
             1,
-        )
+        );
+        format!("notez (global) — {}", path)
     } else {
-        "./notez".to_string()
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let name = crate::project::detect_project_name(&cwd);
+        format!("notez ({}) — ./notez", name)
     };
 
-    run_tree_tui(nodes, &config.editor, &display_root);
+    run_tree_tui(nodes, &config.editor, &title);
 }
 
 fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str) {
