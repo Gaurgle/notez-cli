@@ -5,7 +5,7 @@ use crate::config::Config;
 
 /// Create a mock notez directory structure for screenshots and demos.
 pub fn run_demo() {
-    let dir = std::env::temp_dir().join("notez-demo");
+    let dir = dirs::home_dir().unwrap().join(".notez-demo");
 
     // Clean previous demo
     if dir.exists() {
