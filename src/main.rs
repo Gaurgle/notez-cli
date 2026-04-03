@@ -194,6 +194,13 @@ fn print_help() {
     println!("  {}", div);
     println!();
 
+    println!("  {}", c.mauve.apply_to("Global mode (-g)"));
+    cmd("notez -g add [title]", "note in ~/notez/00_quick-notes/");
+    cmd("notez -g log <message>", "log in ~/notez/01_daily-logs/");
+    cmd("notez -g todo", "todos from all projects");
+    cmd("notez -g tree", "browse all projects");
+    println!();
+
     let key = |k: &str, ks: &console::Style, desc: &str| {
         let pad = 5usize.saturating_sub(k.len());
         println!("    {}{}  {}", ks.apply_to(k), " ".repeat(pad), c.overlay.apply_to(desc));
