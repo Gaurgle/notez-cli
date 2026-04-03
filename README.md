@@ -6,6 +6,8 @@
 
 A local-first CLI note-taking tool. Notes live with your projects, mirrored to a home directory for a unified view.
 
+![notez tree — local project view](pictures/notez-local.png)
+
 ## Install
 
 ```bash
@@ -36,9 +38,7 @@ A friendly step-by-step wizard that configures your home notes folder, directory
 ~/Repos/my-project/
   notez/                            ← same layout as global
     00_quick-notes/                 ← notez add
-      2026-04-02-api-design.md
     01_daily-logs/                  ← notez log
-      2026-04-02-daily-log.md
     02_research/                    ← notez mkdir
     TODO.md                         ← notez todo
 
@@ -46,10 +46,6 @@ A friendly step-by-step wizard that configures your home notes folder, directory
   00_quick-notes/                   ← global quick notes (-g)
   01_daily-logs/                    ← global daily logs (-g)
   02_my-project/                    ← symlinks to project dirs
-    00_quick-notes/               → ~/Repos/my-project/notez/00_quick-notes/
-    01_daily-logs/                → ~/Repos/my-project/notez/01_daily-logs/
-    02_research/                  → ~/Repos/my-project/notez/02_research/
-    TODO.md                       → ~/Repos/my-project/notez/TODO.md
   TODO.md                           ← global todos (-g)
 ```
 
@@ -76,14 +72,36 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | `notez log <message>` | Append a timestamped entry to today's log |
 | `notez logz` / `notez logs` | Browse daily logs |
 
+### Browse & Organize
+
+| Command | Description |
+|---|---|
+| `notez` | Browse notes in yazi |
+| `notez tree` | Interactive tree navigator |
+| `notez search <term>` | Search note content (rg + fzf) |
+| `notez mkdir <name>` | Create a numbered subdirectory |
+
+**Tree keybindings:**
+
+| Key | Action |
+|---|---|
+| `j` / `k` | Navigate |
+| `l` / `→` | Expand directory |
+| `h` / `←` | Collapse / go to parent |
+| `o` / `Enter` | Open file in editor |
+| `q` / `Esc` / `Ctrl+C` / `:wq` | Quit |
+
+![notez tree — global view across all projects](pictures/notez-global.png)
+
 ### Todos
 
 | Command | Description |
 |---|---|
-| `notez todo` | Interactive todo manager |
+| `notez todo` / `todoz` | Interactive todo manager |
 | `notez todo "item"` | Quick-add a todo item |
-| `notez todoz` | Alias for `notez todo` |
-| `notez -g todo` | View all todos across every project, grouped |
+| `notez -g todo` / `todoz -g` | View all todos across every project |
+
+![todoz — local project todos with subtasks](pictures/todoz-local.png)
 
 **Todo keybindings:**
 
@@ -103,24 +121,7 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 **Subtasks:** One level deep. Parent state auto-derived from subtask completion.
 
-### Browse & Organize
-
-| Command | Description |
-|---|---|
-| `notez` | Browse notes in yazi |
-| `notez tree` | Interactive tree navigator |
-| `notez search <term>` | Search note content (rg + fzf) |
-| `notez mkdir <name>` | Create a numbered subdirectory |
-
-**Tree keybindings:**
-
-| Key | Action |
-|---|---|
-| `j` / `k` | Navigate |
-| `l` / `→` | Expand directory |
-| `h` / `←` | Collapse / go to parent |
-| `o` / `Enter` | Open file in editor |
-| `q` / `Esc` / `Ctrl+C` / `:wq` | Quit |
+![todoz -g — global view with all projects and subtasks](pictures/todoz-global.png)
 
 ### Global Mode
 
@@ -160,6 +161,7 @@ alias znote='noglob znote'
 | `notez setup` | Interactive setup wizard |
 | `notez completions <shell>` | Generate shell completions (zsh, bash, fish) |
 | `notez -h` | Styled help with keybinding reference |
+| `notez demo` | Create demo project for screenshots |
 
 ## Tab Completions
 
