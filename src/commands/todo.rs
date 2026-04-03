@@ -461,13 +461,15 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     ])
                 } else {
                     let width = chunks[1].width as usize;
-                    let left = " xheck  new  subtask  edit  delete";
+                    let left = " xheck  almost  new  subtask  edit  delete";
                     let right = "quit ";
                     let padding = width.saturating_sub(left.len() + right.len());
                     Line::from(vec![
                         Span::styled(" ", Style::default()),
                         Span::styled("x", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
                         Span::styled("heck  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("a", Style::default().fg(theme::YELLOW).add_modifier(bold)),
+                        Span::styled("lmost  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("n", Style::default().fg(theme::GREEN).add_modifier(bold)),
                         Span::styled("ew  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("s", Style::default().fg(theme::LAVENDER).add_modifier(bold)),
@@ -697,7 +699,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     }
                 }
 
-                KeyCode::Char('/') => {
+                KeyCode::Char('/') | KeyCode::Char('a') => {
                     if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].has_subtasks {
                         items[real_idx].state = match items[real_idx].state {
                             CheckState::Half => CheckState::Unchecked,
