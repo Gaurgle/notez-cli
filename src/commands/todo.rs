@@ -101,26 +101,20 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         all_items.extend(items);
     }
 
-    // Also check root TODO.md
+    // Always include global section at the top
     let root_todo = root.join("TODO.md");
-    if root_todo.exists() {
-        let items = load_single_todo(&root_todo, "global");
-        if !items.is_empty() {
-            all_items.insert(0, TodoItem {
-                text: "global".to_string(),
-                checked: false,
-                source: root_todo,
-                project: "global".to_string(),
-                is_header: true,
-            });
-            // Insert after the header
-            for (i, item) in items.into_iter().enumerate() {
-                all_items.insert(i + 1, item);
-            }
-        }
-    }
+    let global_items = load_single_todo(&root_todo, "global");
+    let mut result = vec![TodoItem {
+        text: "global".to_string(),
+        checked: false,
+        source: root_todo,
+        project: "global".to_string(),
+        is_header: true,
+    }];
+    result.extend(global_items);
+    result.extend(all_items);
 
-    all_items
+    result
 }
 
 fn save_all_todos(items: &[TodoItem]) {
@@ -374,27 +368,37 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                 match key.code {
                     KeyCode::Enter => {
                         if !input_buffer.is_empty() {
-                            // In global mode, add to the project of the currently selected item
-                            let source = if let Some(sel) = state.selected() {
-                                items.get(sel).map(|i| i.source.clone()).unwrap_or_default()
-                            } else if !items.is_empty() {
-                                items.last().unwrap().source.clone()
-                            } else {
-                                PathBuf::new()
+                            // Find the section the cursor is in — walk back to nearest header
+                            let selected = state.selected().unwrap_or(0);
+                            let (source, project) = {
+                                let mut src = PathBuf::new();
+                                let mut proj = "global".to_string();
+                                for i in (0..=selected).rev() {
+                                    if items[i].is_header {
+                                        src = items[i].source.clone();
+                                        proj = items[i].project.clone();
+                                        break;
+                                    }
+                                    src = items[i].source.clone();
+                                    proj = items[i].project.clone();
+                                }
+                                (src, proj)
                             };
-                            let project = if let Some(sel) = state.selected() {
-                                items.get(sel).map(|i| i.project.clone()).unwrap_or_default()
-                            } else {
-                                "local".to_string()
-                            };
-                            items.push(TodoItem {
+
+                            // Insert after the last item in this section
+                            let mut insert_at = selected + 1;
+                            while insert_at < items.len() && !items[insert_at].is_header {
+                                insert_at += 1;
+                            }
+
+                            items.insert(insert_at, TodoItem {
                                 text: input_buffer.clone(),
                                 checked: false,
                                 source,
                                 project,
                                 is_header: false,
                             });
-                            state.select(Some(items.len() - 1));
+                            state.select(Some(insert_at));
                         }
                         input_buffer.clear();
                         input_mode = false;
