@@ -1,6 +1,7 @@
 use ratatui::style::{Color, Modifier, Style};
 
 // Catppuccin Mocha palette — true RGB values
+pub const RED: Color = Color::Rgb(243, 139, 168);
 pub const PEACH: Color = Color::Rgb(250, 179, 135);
 pub const GREEN: Color = Color::Rgb(166, 227, 161);
 pub const YELLOW: Color = Color::Rgb(249, 226, 175);

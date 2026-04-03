@@ -323,16 +323,16 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     let padding = width.saturating_sub(left.len() + right.len());
                     Line::from(vec![
                         Span::styled(" ", Style::default()),
-                        Span::styled("x", Style::default().fg(theme::GREEN).add_modifier(bold)),
+                        Span::styled("x", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
                         Span::styled("heck  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("n", Style::default().fg(theme::GREEN).add_modifier(bold)),
                         Span::styled("ew  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("e", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
+                        Span::styled("e", Style::default().fg(theme::MAUVE).add_modifier(bold)),
                         Span::styled("dit  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("d", Style::default().fg(theme::PEACH).add_modifier(bold)),
+                        Span::styled("d", Style::default().fg(theme::RED).add_modifier(bold)),
                         Span::styled("elete", Style::default().fg(theme::OVERLAY)),
                         Span::styled(" ".repeat(padding), Style::default()),
-                        Span::styled("q", Style::default().fg(theme::OVERLAY).add_modifier(bold)),
+                        Span::styled("q", Style::default().fg(theme::PEACH).add_modifier(bold)),
                         Span::styled("uit ", Style::default().fg(theme::OVERLAY)),
                     ])
                 };
