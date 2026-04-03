@@ -168,11 +168,17 @@ fn print_help() {
     cmd("notez mkdir <name>", "create a numbered subdirectory");
     println!();
 
-    println!("  {}", c.mauve.apply_to("Shortcuts"));
-    cmd("notez zlog <message>", "same as notez log");
-    cmd("notez zlogs", "same as notez logz");
-    cmd("notez znote [title]", "same as notez add");
-    cmd("notez todoz", "same as notez todo");
+    println!("  {}", c.mauve.apply_to("Standalone shortcuts"));
+    println!(
+        "    {}",
+        c.overlay.apply_to("(add as shell aliases for quick access)")
+    );
+    cmd("zlog <message>", "quick log entry");
+    cmd("zlogs", "browse daily logs");
+    cmd("logz", "browse daily logs");
+    cmd("znote [title]", "create a note");
+    cmd("todoz", "interactive todo manager");
+    cmd("todoz -g", "todos from all projects");
     println!();
 
     println!("  {}", c.mauve.apply_to("Setup"));
