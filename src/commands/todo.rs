@@ -376,11 +376,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                                 Span::styled(path_display, Style::default().fg(theme::OVERLAY)),
                             ]))
                         } else {
-                            let indent = if item.is_subtask { "        " } else { "    " };
-                            let collapse_icon = if item.has_subtasks {
-                                if item.collapsed { "▶ " } else { "▼ " }
+                            let (indent, collapse_icon) = if item.is_subtask {
+                                ("        ", "")
+                            } else if item.has_subtasks {
+                                if item.collapsed { ("  ", "▶ ") } else { ("  ", "▼ ") }
                             } else {
-                                ""
+                                ("    ", "")
                             };
                             let (checkbox, style) = match item.state {
                                 CheckState::Checked => (
