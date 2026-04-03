@@ -307,7 +307,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                 // Status bar
                 let status = if confirm_delete {
                     Line::from(vec![
-                        Span::styled(" delete this todo? ", Style::default().fg(theme::PEACH)),
+                        Span::styled(" delete this todo? ", Style::default().fg(theme::TEXT)),
                         Span::styled("y", Style::default().fg(theme::PEACH).add_modifier(ratatui::style::Modifier::BOLD)),
                         Span::styled("es  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("n", Style::default().fg(theme::SAPPHIRE).add_modifier(ratatui::style::Modifier::BOLD)),
@@ -327,8 +327,8 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     let bold = ratatui::style::Modifier::BOLD;
                     Line::from(vec![
                         Span::styled(" ", Style::default()),
-                        Span::styled("t", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
-                        Span::styled("oggle  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("x", Style::default().fg(theme::GREEN).add_modifier(bold)),
+                        Span::styled(" check  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("a", Style::default().fg(theme::GREEN).add_modifier(bold)),
                         Span::styled("dd  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("e", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
