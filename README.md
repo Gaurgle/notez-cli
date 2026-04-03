@@ -133,25 +133,24 @@ notez -g tree                       # shows all projects
 notez -g todo                       # todos from every project
 ```
 
-### Shortcuts
+### Standalone Commands
 
-Built-in shortcut subcommands:
+Installed automatically as symlinks — no aliases needed:
 
 | Command | Same as |
 |---|---|
-| `notez zlog <message>` | `notez log` |
-| `notez zlogs` | `notez logz` |
-| `notez znote [title]` | `notez add` |
-| `notez todoz` | `notez todo` |
+| `todoz` | `notez todo` |
+| `todoz -g` | `notez -g todo` |
+| `zlog <message>` | `notez log` |
+| `zlogs` | `notez logz` |
+| `logz` | `notez logz` |
+| `znote [title]` | `notez add` |
 
-For standalone access, add shell aliases (`noglob` prevents zsh glob expansion on `?` `*` etc.):
+**Zsh users:** if you use `?` or `*` in messages, add these to `.zshrc` to prevent glob expansion:
 
 ```bash
-alias zlog='noglob notez zlog'
-alias zlogs='notez zlogs'
-alias logz='notez logz'
-alias znote='noglob notez znote'
-alias todoz='notez todoz'
+alias zlog='noglob zlog'
+alias znote='noglob znote'
 ```
 
 ### Setup & Config
