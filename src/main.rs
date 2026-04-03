@@ -194,44 +194,51 @@ fn print_help() {
     println!("  {}", div);
     println!();
 
+    // Helper: print a colored string padded to `w` visible characters
+    let col = |text: &str, style: &console::Style, w: usize| -> String {
+        let pad = w.saturating_sub(text.len());
+        format!("{}{}", style.apply_to(text), " ".repeat(pad))
+    };
+
+    let w = 10;
     println!("  {}", c.mauve.apply_to("Todo keys"));
     println!(
-        "    {}  {}  {}  {}  {}  {}  {}  {}",
-        c.sapphire.apply_to("x"),
-        c.yellow.apply_to("a"),
-        c.green.apply_to("n"),
-        c.lavender.apply_to("s"),
-        c.mauve.apply_to("e"),
-        c.peach.apply_to("d"),
-        c.overlay.apply_to("h/l"),
+        "    {}{}{}{}{}{}{}{}",
+        col("x", &c.sapphire, w),
+        col("a", &c.yellow, w),
+        col("n", &c.green, w),
+        col("s", &c.lavender, w),
+        col("e", &c.mauve, w),
+        col("d", &c.peach, w),
+        col("h/l", &c.overlay, w),
         c.peach.apply_to("q"),
     );
     println!(
-        "    {}  {}  {}  {}  {}  {}  {}  {}",
-        c.overlay.apply_to("check"),
-        c.overlay.apply_to("almost"),
-        c.overlay.apply_to("new"),
-        c.overlay.apply_to("subtask"),
-        c.overlay.apply_to("edit"),
-        c.overlay.apply_to("delete"),
-        c.overlay.apply_to("fold"),
+        "    {}{}{}{}{}{}{}{}",
+        col("check", &c.overlay, w),
+        col("almost", &c.overlay, w),
+        col("new", &c.overlay, w),
+        col("subtask", &c.overlay, w),
+        col("edit", &c.overlay, w),
+        col("delete", &c.overlay, w),
+        col("fold", &c.overlay, w),
         c.overlay.apply_to("quit"),
     );
     println!();
 
     println!("  {}", c.mauve.apply_to("Tree keys"));
     println!(
-        "    {}  {}  {}  {}",
-        c.sapphire.apply_to("j/k"),
-        c.mauve.apply_to("h/l"),
-        c.green.apply_to("o"),
+        "    {}{}{}{}",
+        col("j/k", &c.sapphire, w),
+        col("h/l", &c.mauve, w),
+        col("o", &c.green, w),
         c.peach.apply_to("q"),
     );
     println!(
-        "    {}  {}  {}  {}",
-        c.overlay.apply_to("move"),
-        c.overlay.apply_to("fold"),
-        c.overlay.apply_to("open"),
+        "    {}{}{}{}",
+        col("move", &c.overlay, w),
+        col("fold", &c.overlay, w),
+        col("open", &c.overlay, w),
         c.overlay.apply_to("quit"),
     );
     println!();
