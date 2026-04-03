@@ -19,7 +19,7 @@ pub fn header() -> Style {
 }
 
 pub fn selected() -> Style {
-    Style::default().fg(SAPPHIRE).bg(SURFACE)
+    Style::default().bg(Color::Rgb(49, 50, 68)) // Catppuccin Surface0 — subtle highlight
 }
 
 pub fn normal() -> Style {
