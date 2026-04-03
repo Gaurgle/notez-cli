@@ -452,7 +452,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool) -> Vec<TodoItem> {
                     Line::from(vec![
                         Span::styled(label, Style::default().fg(theme::MAUVE)),
                         Span::styled(input_buffer.as_str(), Style::default().fg(theme::TEXT)),
-                        Span::styled("▏", Style::default().fg(theme::SAPPHIRE).add_modifier(ratatui::style::Modifier::SLOW_BLINK)),
+                        Span::styled("█", Style::default().fg(theme::SAPPHIRE)),
                     ])
                 } else if vim.active {
                     Line::from(vec![
