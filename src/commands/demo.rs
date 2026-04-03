@@ -1,10 +1,9 @@
 use std::fs;
 
 use crate::colors::Colors;
-use crate::config::Config;
 
 /// Create a mock notez directory structure for screenshots and demos.
-pub fn run_demo() {
+pub fn run_demo(view: Option<String>) {
     let dir = dirs::home_dir().unwrap().join(".notez-demo");
 
     // Clean previous demo
