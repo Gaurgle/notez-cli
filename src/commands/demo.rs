@@ -100,7 +100,10 @@ pub fn run_demo() {
 - [ ] Read Rust book chapter 12\n").unwrap();
 
     // Write a temporary config pointing to the demo home
-    let demo_config = dir.join("config");
+    // XDG_CONFIG_HOME looks for $XDG_CONFIG_HOME/notez/config
+    let demo_config_dir = dir.join("notez");
+    fs::create_dir_all(&demo_config_dir).unwrap();
+    let demo_config = demo_config_dir.join("config");
     let config_content = format!(
         "NOTEZ_ROOT={}\nQUICK_NOTES_DIR=00_quick-notes\nDAILY_LOGS_DIR=01_daily-logs\nEDITOR=nvim\nHAS_FZF=true\nHAS_RG=true\nHAS_YAZI=true\n",
         home.to_string_lossy()
