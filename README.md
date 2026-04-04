@@ -118,15 +118,17 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | `s` | Add subtask |
 | `e` | Edit text |
 | `d` | Delete (y/n confirm) |
-| `h` / `l` | Collapse / expand subtasks |
-| `j` / `k` | Navigate |
+| `h` / `l` | Collapse / expand (subtasks + project sections) |
+| `j` / `k` / mouse scroll | Navigate |
 | `q` / `Esc` / `Ctrl+C` / `:wq` | Quit |
 
 **Todo states:** `[ ]` unchecked → `[/]` almost done → `[x]` checked
 
 **Subtasks:** One level deep. Parent state auto-derived from subtask completion.
 
-**Code TODOs:** The TUI automatically scans your project source for `// TODO`, `# TODO`, etc. and displays them as a read-only section. Shows file path and line number — visible alongside your notez todos but non-interactive.
+**Code TODOs:** Automatically scans project source for `// TODO`, `# TODO`, `-- TODO`, `/* TODO`, `<!-- TODO` comments. Displayed as a read-only section with file path and line number — visible alongside your todos but non-interactive.
+
+**Global view (`todoz -g`):** Projects start collapsed — expand with `l`. Shows scroll position when the list exceeds the viewport. Aggregates private + public todos from all projects, each with a lock/globe indicator.
 
 ![todoz -g — global view with all projects and subtasks](pictures/todoz-global.png)
 
