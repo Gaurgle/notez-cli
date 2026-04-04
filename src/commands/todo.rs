@@ -952,6 +952,16 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                     }
                 }
 
+                KeyCode::Char('c') => {
+                    // Collapse all headers and subtask parents
+                    for item in items.iter_mut() {
+                        if item.is_header || item.has_subtasks {
+                            item.collapsed = true;
+                        }
+                    }
+                    state.select(Some(0));
+                }
+
                 KeyCode::Char(' ') | KeyCode::Char('x') | KeyCode::Enter => {
                     if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         if items[real_idx].has_subtasks {
