@@ -28,40 +28,77 @@ pub fn detect_project_name(dir: &Path) -> String {
         .unwrap_or_else(|| "unnamed".into())
 }
 
-/// Returns the local notez directory for the current working directory.
-pub fn local_notez_dir() -> PathBuf {
+/// Returns the private local notez directory (.notez/).
+pub fn local_private_dir() -> PathBuf {
+    std::env::current_dir()
+        .expect("failed to get current directory")
+        .join(".notez")
+}
+
+/// Returns the public local notez directory (notez/).
+pub fn local_public_dir() -> PathBuf {
     std::env::current_dir()
         .expect("failed to get current directory")
         .join("notez")
 }
 
+/// Returns the local notez directory based on public flag.
+pub fn local_notez_dir(public: bool) -> PathBuf {
+    if public {
+        local_public_dir()
+    } else {
+        local_private_dir()
+    }
+}
+
 /// Resolve the working directory for a command.
-/// If global, returns the home notez root. If local, returns ./notez/.
-pub fn resolve_notez_dir(config: &Config, global: bool) -> PathBuf {
+pub fn resolve_notez_dir(config: &Config, global: bool, public: bool) -> PathBuf {
     if global {
         config.root_path()
     } else {
-        local_notez_dir()
+        local_notez_dir(public)
     }
 }
 
-/// Resolve the quick notes directory (local or global).
-pub fn resolve_quick_notes_dir(config: &Config, global: bool) -> PathBuf {
+/// Resolve the quick notes directory.
+pub fn resolve_quick_notes_dir(config: &Config, global: bool, public: bool) -> PathBuf {
     if global {
         config.quick_notes_path()
     } else {
-        local_notez_dir().join(&config.quick_notes_dir)
+        local_notez_dir(public).join(&config.quick_notes_dir)
     }
 }
 
-/// Resolve the daily logs directory (local or global).
-pub fn resolve_daily_logs_dir(config: &Config, global: bool) -> PathBuf {
+/// Resolve the daily logs directory.
+pub fn resolve_daily_logs_dir(config: &Config, global: bool, public: bool) -> PathBuf {
     if global {
         config.daily_logs_path()
     } else {
-        local_notez_dir().join(&config.daily_logs_dir)
+        local_notez_dir(public).join(&config.daily_logs_dir)
     }
 }
+
+/// Auto-add .notez/ to .gitignore if not already there.
+pub fn ensure_gitignore() {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let gitignore = cwd.join(".gitignore");
+    let entry = ".notez/";
+
+    if let Ok(content) = std::fs::read_to_string(&gitignore) {
+        if content.lines().any(|l| l.trim() == entry) {
+            return;
+        }
+    }
+
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&gitignore) {
+        writeln!(f, "{}", entry).ok();
+    }
+}
+
+/// Nerdfont icons for private/public.
+pub const ICON_PRIVATE: &str = "\u{f023}";  // lock
+pub const ICON_PUBLIC: &str = "\u{f0ac}";   // globe
 
 /// Ensure the project has a numbered directory in the home notez root.
 /// Returns the path to the project's home dir (e.g., ~/notez/02_my-project/).

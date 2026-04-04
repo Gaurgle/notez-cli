@@ -136,14 +136,15 @@ fn derive_parent_states(items: &mut Vec<TodoItem>) {
 
 // --- Loading ---
 
-fn load_local_todos(config: &Config) -> Vec<TodoItem> {
-    let root = project::resolve_notez_dir(config, false);
+fn load_local_todos(config: &Config, public: bool) -> Vec<TodoItem> {
+    let root = project::resolve_notez_dir(config, false, public);
     let path = root.join("TODO.md");
     let cwd = std::env::current_dir().unwrap_or_default();
     let project_name = project::detect_project_name(&cwd);
+    let icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
 
     let mut result = vec![TodoItem {
-        text: project_name.clone(),
+        text: format!("{} {}", icon, project_name),
         state: CheckState::Unchecked,
         source: path.clone(),
         project: project_name,
@@ -160,6 +161,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
     let root = config.root_path();
     let mut all_items = Vec::new();
 
+    // Scan home notez dir (private, symlinked)
     let Ok(entries) = fs::read_dir(&root) else {
         return all_items;
     };
@@ -182,10 +184,35 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         }
 
         all_items.push(TodoItem {
-            text: dir_name.clone(),
+            text: format!("{} {}", project::ICON_PRIVATE, dir_name),
             state: CheckState::Unchecked,
             source: todo_path.clone(),
             project: dir_name,
+            is_header: true,
+            is_subtask: false,
+            has_subtasks: false,
+            collapsed: false,
+        });
+        all_items.extend(items);
+    }
+
+    // Also scan project paths for public notez/TODO.md
+    let mapping = project::ProjectMapping::load();
+    for (name, path) in &mapping.projects {
+        let public_todo = std::path::PathBuf::from(path).join("notez").join("TODO.md");
+        if !public_todo.exists() {
+            continue;
+        }
+        let items = load_single_todo(&public_todo, name);
+        if items.is_empty() {
+            continue;
+        }
+
+        all_items.push(TodoItem {
+            text: format!("{} {}", project::ICON_PUBLIC, name),
+            state: CheckState::Unchecked,
+            source: public_todo,
+            project: name.clone(),
             is_header: true,
             is_subtask: false,
             has_subtasks: false,
@@ -198,7 +225,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
     let root_todo = root.join("TODO.md");
     let global_items = load_single_todo(&root_todo, "global");
     let mut result = vec![TodoItem {
-        text: "global".to_string(),
+        text: format!("{} global", project::ICON_PRIVATE),
         state: CheckState::Unchecked,
         source: root_todo,
         project: "global".to_string(),
@@ -233,12 +260,16 @@ fn save_all_todos(items: &[TodoItem]) {
 
 // --- Public API ---
 
-pub fn run_todo(global: bool, item: Option<String>) {
+pub fn run_todo(global: bool, public: bool, item: Option<String>) {
     let config = Config::require();
+
+    if !global && !public {
+        project::ensure_gitignore();
+    }
 
     match item {
         Some(text) => {
-            let root = project::resolve_notez_dir(&config, global);
+            let root = project::resolve_notez_dir(&config, global, public);
             let path = root.join("TODO.md");
             let project_name = if global {
                 "global".to_string()
@@ -263,16 +294,18 @@ pub fn run_todo(global: bool, item: Option<String>) {
             fs::write(&path, serialize_todos_for_file(&items, &path))
                 .expect("failed to write TODO.md");
 
-            if !global {
+            if !global && !public {
                 let home_dir = project::ensure_home_project_dir(&config);
                 project::mirror_file_to_home(&path, &home_dir);
             }
 
             let colors = Colors::new();
+            let scope_icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
             let real_count = items.iter().filter(|i| !i.is_header).count();
             println!(
-                "  {} added to TODO ({} items)",
+                "  {} {} added to TODO ({} items)",
                 colors.green.apply_to("✓"),
+                colors.overlay.apply_to(scope_icon),
                 real_count
             );
         }
@@ -282,13 +315,14 @@ pub fn run_todo(global: bool, item: Option<String>) {
             } else {
                 let cwd = std::env::current_dir().unwrap_or_default();
                 let name = project::detect_project_name(&cwd);
-                (load_local_todos(&config), format!("todoz ({})", name))
+                let icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
+                (load_local_todos(&config, public), format!("{} todoz ({})", icon, name))
             };
             let updated = run_todo_tui(items, global, &tui_title);
             if global {
                 save_all_todos(&updated);
             } else {
-                let root = project::resolve_notez_dir(&config, false);
+                let root = project::resolve_notez_dir(&config, false, public);
                 let path = root.join("TODO.md");
                 if let Some(parent) = path.parent() {
                     fs::create_dir_all(parent).ok();
@@ -296,8 +330,10 @@ pub fn run_todo(global: bool, item: Option<String>) {
                 fs::write(&path, serialize_todos_for_file(&updated, &path))
                     .expect("failed to write TODO.md");
 
-                let home_dir = project::ensure_home_project_dir(&config);
-                project::mirror_file_to_home(&path, &home_dir);
+                if !public {
+                    let home_dir = project::ensure_home_project_dir(&config);
+                    project::mirror_file_to_home(&path, &home_dir);
+                }
             }
         }
     }

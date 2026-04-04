@@ -8,10 +8,14 @@ use crate::colors::Colors;
 use crate::config::Config;
 use crate::project;
 
-pub fn run_log(global: bool, message: Vec<String>) {
+pub fn run_log(global: bool, public: bool, message: Vec<String>) {
     let config = Config::require();
 
-    let logs_dir = project::resolve_daily_logs_dir(&config, global);
+    if !global && !public {
+        project::ensure_gitignore();
+    }
+
+    let logs_dir = project::resolve_daily_logs_dir(&config, global, public);
     fs::create_dir_all(&logs_dir).expect("failed to create logs directory");
 
     let now = Local::now();
@@ -26,15 +30,17 @@ pub fn run_log(global: bool, message: Vec<String>) {
 
     let file_path = append_log_entry(&logs_dir, &date, &time, &msg);
 
-    if !global {
+    if !global && !public {
         let home_dir = project::ensure_home_project_dir(&config);
         project::mirror_dir_to_home(&logs_dir, &home_dir);
     }
 
     let colors = Colors::new();
+    let scope_icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
     println!(
-        "  {} logged to {}-daily-log.md",
+        "  {} {} logged to {}-daily-log.md",
         colors.green.apply_to("✓"),
+        colors.overlay.apply_to(scope_icon),
         date
     );
 }

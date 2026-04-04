@@ -6,9 +6,9 @@ use crate::colors::Colors;
 use crate::config::Config;
 use crate::project;
 
-pub fn run_edit(global: bool, term: Option<String>) {
+pub fn run_edit(global: bool, public: bool, term: Option<String>) {
     let config = Config::require();
-    let root = project::resolve_notez_dir(&config, global);
+    let root = project::resolve_notez_dir(&config, global, public);
 
     if !root.exists() {
         let colors = Colors::new();

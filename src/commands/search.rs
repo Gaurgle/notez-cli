@@ -4,9 +4,9 @@ use crate::colors::Colors;
 use crate::config::Config;
 use crate::project;
 
-pub fn run_search(global: bool, term: String) {
+pub fn run_search(global: bool, public: bool, term: String) {
     let config = Config::require();
-    let root = project::resolve_notez_dir(&config, global);
+    let root = project::resolve_notez_dir(&config, global, public);
     let colors = Colors::new();
 
     if config.has_rg && config.has_fzf {

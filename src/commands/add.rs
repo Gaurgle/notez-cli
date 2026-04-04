@@ -9,17 +9,21 @@ use crate::config::Config;
 use crate::numbering;
 use crate::project;
 
-pub fn run_add(global: bool, title: Option<String>, target: Option<String>, body: Option<String>) {
+pub fn run_add(global: bool, public: bool, title: Option<String>, target: Option<String>, body: Option<String>) {
     let config = Config::require();
     let date = Local::now().format("%Y-%m-%d").to_string();
     let raw_title = title.unwrap_or_else(|| "untitled".into());
     let clean_title = sanitize_title(&raw_title);
 
-    let root = project::resolve_notez_dir(&config, global);
+    if !global && !public {
+        project::ensure_gitignore();
+    }
+
+    let root = project::resolve_notez_dir(&config, global, public);
 
     let target_dir = match target {
         None => {
-            let dir = project::resolve_quick_notes_dir(&config, global);
+            let dir = project::resolve_quick_notes_dir(&config, global, public);
             fs::create_dir_all(&dir).expect("failed to create quick notes directory");
             dir
         }
@@ -29,13 +33,16 @@ pub fn run_add(global: bool, title: Option<String>, target: Option<String>, body
 
     let file_path = create_note_file(&target_dir, &date, &clean_title, body.as_deref());
     let colors = Colors::new();
+    let scope_icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
     println!(
-        "  {} created {}",
+        "  {} {} created {}",
         colors.green.apply_to("✓"),
+        colors.overlay.apply_to(scope_icon),
         colors.sapphire.apply_to(file_path.file_name().unwrap().to_str().unwrap())
     );
 
-    if !global {
+    // Only symlink private notes to home
+    if !global && !public {
         let home_dir = project::ensure_home_project_dir(&config);
         project::mirror_dir_to_home(&target_dir, &home_dir);
     }

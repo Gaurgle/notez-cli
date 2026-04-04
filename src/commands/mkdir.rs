@@ -6,9 +6,12 @@ use crate::config::Config;
 use crate::numbering;
 use crate::project;
 
-pub fn run_mkdir(global: bool, name_parts: Vec<String>) {
+pub fn run_mkdir(global: bool, public: bool, name_parts: Vec<String>) {
     let config = Config::require();
-    let root = project::resolve_notez_dir(&config, global);
+    if !global && !public {
+        project::ensure_gitignore();
+    }
+    let root = project::resolve_notez_dir(&config, global, public);
     let raw_name = name_parts.join(" ");
 
     if raw_name.is_empty() {
@@ -46,7 +49,7 @@ pub fn run_mkdir(global: bool, name_parts: Vec<String>) {
                 colors.sapphire.apply_to(&full_name)
             );
 
-            if !global {
+            if !global && !public {
                 let created_dir = root.join(&full_name);
                 let home_dir = project::ensure_home_project_dir(&config);
                 project::mirror_dir_to_home(&created_dir, &home_dir);

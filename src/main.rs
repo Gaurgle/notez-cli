@@ -19,6 +19,10 @@ pub struct Cli {
     #[arg(short = 'g', long = "global", global = true)]
     global: bool,
 
+    /// Use public ./notez/ instead of private ./.notez/
+    #[arg(short = 'p', long = "public", global = true)]
+    public: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -251,14 +255,14 @@ fn main() {
         }
 
         match cli.command {
-            Some(Commands::Todoz) => commands::todo::run_todo(cli.global, None),
-            Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, item),
-            Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, message),
-            Some(Commands::Zlogs) => commands::browse::run_logz(cli.global),
-            Some(Commands::Logs) => commands::browse::run_logz(cli.global),
+            Some(Commands::Todoz) => commands::todo::run_todo(cli.global, cli.public, None),
+            Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
+            Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
+            Some(Commands::Zlogs) => commands::browse::run_logz(cli.global, cli.public),
+            Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
             Some(Commands::Znote { title, r#in }) => {
                 let (t, body) = split_title_body(title);
-                commands::add::run_add(cli.global, t, r#in, body)
+                commands::add::run_add(cli.global, cli.public, t, r#in, body)
             }
             _ => {
                 print_help();
@@ -275,27 +279,27 @@ fn main() {
     }
 
     match cli.command {
-        None => commands::browse::run_browse(cli.global),
+        None => commands::browse::run_browse(cli.global, cli.public),
         Some(Commands::Add { title, r#in }) => {
             let (t, body) = split_title_body(title);
-            commands::add::run_add(cli.global, t, r#in, body)
+            commands::add::run_add(cli.global, cli.public, t, r#in, body)
         }
-        Some(Commands::Log { message }) => commands::log::run_log(cli.global, message),
-        Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global),
-        Some(Commands::Mkdir { name }) => commands::mkdir::run_mkdir(cli.global, name),
-        Some(Commands::Search { term }) => commands::search::run_search(cli.global, term),
-        Some(Commands::Tree) => commands::tree::run_tree(cli.global),
+        Some(Commands::Log { message }) => commands::log::run_log(cli.global, cli.public, message),
+        Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
+        Some(Commands::Mkdir { name }) => commands::mkdir::run_mkdir(cli.global, cli.public, name),
+        Some(Commands::Search { term }) => commands::search::run_search(cli.global, cli.public, term),
+        Some(Commands::Tree) => commands::tree::run_tree(cli.global, cli.public),
         Some(Commands::Setup) => setup::run_setup(),
         Some(Commands::Demo { view }) => commands::demo::run_demo(view),
-        Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, message),
-        Some(Commands::Zlogs) => commands::browse::run_logz(cli.global),
+        Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
+        Some(Commands::Zlogs) => commands::browse::run_logz(cli.global, cli.public),
         Some(Commands::Completions { shell }) => commands::completions::run_completions(shell),
-        Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, item),
-        Some(Commands::Todoz) => commands::todo::run_todo(cli.global, None),
-        Some(Commands::Edit { term }) => commands::edit::run_edit(cli.global, term),
+        Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
+        Some(Commands::Todoz) => commands::todo::run_todo(cli.global, cli.public, None),
+        Some(Commands::Edit { term }) => commands::edit::run_edit(cli.global, cli.public, term),
         Some(Commands::Znote { title, r#in }) => {
             let (t, body) = split_title_body(title);
-            commands::add::run_add(cli.global, t, r#in, body)
+            commands::add::run_add(cli.global, cli.public, t, r#in, body)
         }
     }
 }

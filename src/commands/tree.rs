@@ -21,9 +21,9 @@ struct TreeNode {
     parent_idx: Option<usize>,
 }
 
-pub fn run_tree(global: bool) {
+pub fn run_tree(global: bool, public: bool) {
     let config = Config::require();
-    let root = project::resolve_notez_dir(&config, global);
+    let root = project::resolve_notez_dir(&config, global, public);
 
     if !root.exists() {
         let colors = crate::colors::Colors::new();
@@ -41,6 +41,7 @@ pub fn run_tree(global: bool) {
         return;
     }
 
+    let scope_icon = if global { "" } else if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
     let title = if global {
         let path = config.notez_root.replacen(
             &dirs::home_dir().unwrap().to_string_lossy().to_string(),
@@ -51,7 +52,8 @@ pub fn run_tree(global: bool) {
     } else {
         let cwd = std::env::current_dir().unwrap_or_default();
         let name = crate::project::detect_project_name(&cwd);
-        format!("notez ({}) — ./notez", name)
+        let dir_name = if public { "./notez" } else { "./.notez" };
+        format!("{} notez ({}) — {}", scope_icon, name, dir_name)
     };
 
     run_tree_tui(nodes, &config.editor, &title);
