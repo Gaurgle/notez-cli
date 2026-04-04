@@ -101,10 +101,10 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 | Command | Description |
 |---|---|
-| `notez todo` / `todoz` | Interactive todo manager (private) |
-| `notez todo -p` | Interactive todo manager (public) |
-| `notez todo "item"` | Quick-add a private todo |
-| `notez -g todo` / `todoz -g` | All todos across every project (private + public) |
+| `todoz` | Interactive todo manager (private) |
+| `todoz -p` | Interactive todo manager (public) |
+| `todoz "item"` | Quick-add a private todo |
+| `todoz -g` | All todos across every project (private + public) |
 
 ![todoz — local project todos with subtasks](pictures/todoz-local.png)
 
@@ -142,7 +142,7 @@ Multi-word titles work without quotes: `notez add my cool idea`
 notez add my idea                   # → .notez/  (private)
 notez add -p shared docs           # → notez/   (public)
 notez -g add personal thought      # → ~/notez/ (global)
-notez -g todo                      # all todos, private + public
+todoz -g                           # all todos, private + public
 ```
 
 ### Standalone Commands
