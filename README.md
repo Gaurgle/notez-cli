@@ -28,39 +28,43 @@ A friendly step-by-step wizard that configures your home notes folder, directory
 
 ## How It Works
 
-**Local-first:** All commands default to `./notez/` in your current directory. Your notes live alongside your project.
+**Private by default:** All commands write to `.notez/` (hidden, auto-gitignored). Your notes stay private and never get committed to the project repo.
 
-**Home mirror:** Every local note is symlinked into `~/notez/` under a project directory (auto-created, named after your git repo). Browse all your notes from one place.
+**Public with `-p`:** Add `-p` to any command to write to `notez/` instead — these notes travel with the project and can be committed.
 
-**Global mode:** Use `-g` before the subcommand to target `~/notez/` directly for notes that aren't tied to a project.
+**Home mirror:** Private notes are symlinked into `~/notez/` under a project directory (auto-created, named after your git repo). Push `~/notez/` as a private repo to sync notes across machines.
+
+**Global mode (`-g`):** Target `~/notez/` directly for notes that aren't tied to a project.
 
 ```
 ~/Repos/my-project/
-  notez/                            ← same layout as global
-    00_quick-notes/                 ← notez add
-    01_daily-logs/                  ← notez log
-    02_research/                    ← notez mkdir
-    TODO.md                         ← notez todo
+  .notez/                           ← private (default, gitignored)
+    00_quick-notes/
+    01_daily-logs/
+    TODO.md
+  notez/                            ← public (-p flag, committed)
+    00_quick-notes/
+    TODO.md
 
 ~/notez/                            ← unified home view
   00_quick-notes/                   ← global quick notes (-g)
   01_daily-logs/                    ← global daily logs (-g)
-  02_my-project/                    ← symlinks to project dirs
+  02_my-project/                    ← symlinks from .notez/ (private)
   TODO.md                           ← global todos (-g)
 ```
 
 ## Commands
 
-All commands default to the local `./notez/` directory. Use `-g` before the subcommand for global `~/notez/`.
+All commands default to private `.notez/`. Add `-p` for public `notez/`, or `-g` for global `~/notez/`.
 
 ### Notes
 
 | Command | Description |
 |---|---|
-| `notez add [title]` | Create a note and open in editor |
+| `notez add [title]` | Create a private note, open in editor |
+| `notez add -p [title]` | Create a public note |
 | `notez add [title] "body text"` | Create a note with content (no editor) |
 | `notez add [title] --in` | Create a note in a subdirectory (fzf picker) |
-| `notez add [title] --in dir` | Create a note in a named subdirectory |
 | `notez edit [term]` | Open an existing note (fuzzy search / fzf picker) |
 
 Multi-word titles work without quotes: `notez add my cool idea`
@@ -97,9 +101,10 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 | Command | Description |
 |---|---|
-| `notez todo` / `todoz` | Interactive todo manager |
-| `notez todo "item"` | Quick-add a todo item |
-| `notez -g todo` / `todoz -g` | View all todos across every project |
+| `notez todo` / `todoz` | Interactive todo manager (private) |
+| `notez todo -p` | Interactive todo manager (public) |
+| `notez todo "item"` | Quick-add a private todo |
+| `notez -g todo` / `todoz -g` | All todos across every project (private + public) |
 
 ![todoz — local project todos with subtasks](pictures/todoz-local.png)
 
@@ -123,15 +128,19 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 ![todoz -g — global view with all projects and subtasks](pictures/todoz-global.png)
 
-### Global Mode
+### Scope Flags
 
-Use `-g` **before** the subcommand:
+| Flag | Scope | Directory |
+|---|---|---|
+| _(default)_ | Private | `.notez/` (gitignored) |
+| `-p` | Public | `notez/` (committed with project) |
+| `-g` | Global | `~/notez/` (all projects) |
 
 ```bash
-notez -g add personal thought       # → ~/notez/00_quick-notes/
-notez -g log "reminder for later"   # → ~/notez/01_daily-logs/
-notez -g tree                       # shows all projects
-notez -g todo                       # todos from every project
+notez add my idea                   # → .notez/  (private)
+notez add -p shared docs           # → notez/   (public)
+notez -g add personal thought      # → ~/notez/ (global)
+notez -g todo                      # all todos, private + public
 ```
 
 ### Standalone Commands
