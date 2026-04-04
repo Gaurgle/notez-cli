@@ -126,6 +126,8 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 **Subtasks:** One level deep. Parent state auto-derived from subtask completion.
 
+**Code TODOs:** The TUI automatically scans your project source for `// TODO`, `# TODO`, etc. and displays them as a read-only section. Shows file path and line number — visible alongside your notez todos but non-interactive.
+
 ![todoz -g — global view with all projects and subtasks](pictures/todoz-global.png)
 
 ### Scope Flags
