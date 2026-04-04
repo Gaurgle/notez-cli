@@ -228,25 +228,79 @@ fn scan_code_todos() -> Vec<TodoItem> {
 
 // --- Loading ---
 
-fn load_local_todos(config: &Config, public: bool) -> Vec<TodoItem> {
-    let root = project::resolve_notez_dir(config, false, public);
-    let path = root.join("TODO.md");
+fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let project_name = project::detect_project_name(&cwd);
-    let icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
+    let mut result = Vec::new();
 
-    let mut result = vec![TodoItem {
-        text: format!("{} {}", icon, project_name),
-        state: CheckState::Unchecked,
-        source: path.clone(),
-        project: project_name,
-        is_header: true,
-        is_subtask: false,
-        has_subtasks: false,
-        collapsed: false,
-        is_code_todo: false,
-    }];
-    result.extend(load_single_todo(&path, &result[0].project));
+    if public {
+        // Only show public
+        let path = project::local_public_dir().join("TODO.md");
+        result.push(TodoItem {
+            text: format!("{} {}", project::ICON_PUBLIC, project_name),
+            state: CheckState::Unchecked,
+            source: path.clone(),
+            project: project_name.clone(),
+            is_header: true,
+            is_subtask: false,
+            has_subtasks: false,
+            collapsed: false,
+            is_code_todo: false,
+        });
+        result.extend(load_single_todo(&path, &project_name));
+    } else {
+        // Show both private and public
+        let private_path = project::local_private_dir().join("TODO.md");
+        let public_path = project::local_public_dir().join("TODO.md");
+
+        let private_items = load_single_todo(&private_path, &project_name);
+        let public_items = load_single_todo(&public_path, &project_name);
+
+        if !private_items.is_empty() {
+            result.push(TodoItem {
+                text: format!("{} {}", project::ICON_PRIVATE, project_name),
+                state: CheckState::Unchecked,
+                source: private_path.clone(),
+                project: project_name.clone(),
+                is_header: true,
+                is_subtask: false,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+            });
+            result.extend(private_items);
+        }
+
+        if !public_items.is_empty() {
+            result.push(TodoItem {
+                text: format!("{} {}", project::ICON_PUBLIC, project_name),
+                state: CheckState::Unchecked,
+                source: public_path.clone(),
+                project: project_name.clone(),
+                is_header: true,
+                is_subtask: false,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+            });
+            result.extend(public_items);
+        }
+
+        // If neither had items, still show a private header so the TUI isn't empty
+        if result.is_empty() {
+            result.push(TodoItem {
+                text: format!("{} {}", project::ICON_PRIVATE, project_name),
+                state: CheckState::Unchecked,
+                source: private_path,
+                project: project_name.clone(),
+                is_header: true,
+                is_subtask: false,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+            });
+        }
+    }
 
     // Scan code TODOs
     let code_todos = scan_code_todos();
@@ -436,18 +490,22 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
             let updated = run_todo_tui(items, global, &tui_title);
             if global {
                 save_all_todos(&updated);
-            } else {
-                let root = project::resolve_notez_dir(&config, false, public);
+            } else if public {
+                let root = project::resolve_notez_dir(&config, false, true);
                 let path = root.join("TODO.md");
                 if let Some(parent) = path.parent() {
                     fs::create_dir_all(parent).ok();
                 }
                 fs::write(&path, serialize_todos_for_file(&updated, &path))
                     .expect("failed to write TODO.md");
+            } else {
+                // Local mode shows both private + public, save each to its own file
+                save_all_todos(&updated);
 
-                if !public {
+                let private_path = project::local_private_dir().join("TODO.md");
+                if private_path.exists() {
                     let home_dir = project::ensure_home_project_dir(&config);
-                    project::mirror_file_to_home(&path, &home_dir);
+                    project::mirror_file_to_home(&private_path, &home_dir);
                 }
             }
         }
@@ -499,6 +557,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
     let mut edit_mode = false;
     let mut edit_idx: usize = 0;
     let mut input_buffer = String::new();
+    let mut cursor_pos: usize = 0;
     let mut confirm_delete = false;
 
     loop {
@@ -696,10 +755,14 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                     ])
                 } else if input_mode || subtask_mode || edit_mode {
                     let label = if edit_mode { " edit: " } else if subtask_mode { " subtask: " } else { " new: " };
+                    let (before, after) = input_buffer.split_at(cursor_pos.min(input_buffer.len()));
+                    let cursor_char = after.chars().next().map(|c| c.to_string()).unwrap_or_else(|| " ".to_string());
+                    let rest = if after.len() > cursor_char.len() { &after[cursor_char.len()..] } else { "" };
                     Line::from(vec![
                         Span::styled(label, Style::default().fg(theme::MAUVE)),
-                        Span::styled(input_buffer.as_str(), Style::default().fg(theme::TEXT)),
-                        Span::styled("█", Style::default().fg(theme::SAPPHIRE)),
+                        Span::styled(before.to_string(), Style::default().fg(theme::TEXT)),
+                        Span::styled(cursor_char, Style::default().fg(theme::BASE).bg(theme::SAPPHIRE)),
+                        Span::styled(rest.to_string(), Style::default().fg(theme::TEXT)),
                     ])
                 } else if vim.active {
                     Line::from(vec![
@@ -832,11 +895,19 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                             }
                         }
                         input_buffer.clear();
+                        cursor_pos = 0;
                         input_mode = false;
                     }
-                    KeyCode::Esc => { input_buffer.clear(); input_mode = false; }
-                    KeyCode::Backspace => { input_buffer.pop(); }
-                    KeyCode::Char(c) => { input_buffer.push(c); }
+                    KeyCode::Esc => { input_buffer.clear(); cursor_pos = 0; input_mode = false; }
+                    KeyCode::Left => { cursor_pos = cursor_pos.saturating_sub(1); }
+                    KeyCode::Right => { if cursor_pos < input_buffer.len() { cursor_pos += 1; } }
+                    KeyCode::Backspace => {
+                        if cursor_pos > 0 {
+                            input_buffer.remove(cursor_pos - 1);
+                            cursor_pos -= 1;
+                        }
+                    }
+                    KeyCode::Char(c) => { input_buffer.insert(cursor_pos, c); cursor_pos += 1; }
                     _ => {}
                 }
                 continue;
@@ -890,11 +961,19 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                             }
                         }
                         input_buffer.clear();
+                        cursor_pos = 0;
                         subtask_mode = false;
                     }
-                    KeyCode::Esc => { input_buffer.clear(); subtask_mode = false; }
-                    KeyCode::Backspace => { input_buffer.pop(); }
-                    KeyCode::Char(c) => { input_buffer.push(c); }
+                    KeyCode::Esc => { input_buffer.clear(); cursor_pos = 0; subtask_mode = false; }
+                    KeyCode::Left => { cursor_pos = cursor_pos.saturating_sub(1); }
+                    KeyCode::Right => { if cursor_pos < input_buffer.len() { cursor_pos += 1; } }
+                    KeyCode::Backspace => {
+                        if cursor_pos > 0 {
+                            input_buffer.remove(cursor_pos - 1);
+                            cursor_pos -= 1;
+                        }
+                    }
+                    KeyCode::Char(c) => { input_buffer.insert(cursor_pos, c); cursor_pos += 1; }
                     _ => {}
                 }
                 continue;
@@ -908,11 +987,19 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                             items[edit_idx].text = input_buffer.clone();
                         }
                         input_buffer.clear();
+                        cursor_pos = 0;
                         edit_mode = false;
                     }
-                    KeyCode::Esc => { input_buffer.clear(); edit_mode = false; }
-                    KeyCode::Backspace => { input_buffer.pop(); }
-                    KeyCode::Char(c) => { input_buffer.push(c); }
+                    KeyCode::Esc => { input_buffer.clear(); cursor_pos = 0; edit_mode = false; }
+                    KeyCode::Left => { cursor_pos = cursor_pos.saturating_sub(1); }
+                    KeyCode::Right => { if cursor_pos < input_buffer.len() { cursor_pos += 1; } }
+                    KeyCode::Backspace => {
+                        if cursor_pos > 0 {
+                            input_buffer.remove(cursor_pos - 1);
+                            cursor_pos -= 1;
+                        }
+                    }
+                    KeyCode::Char(c) => { input_buffer.insert(cursor_pos, c); cursor_pos += 1; }
                     _ => {}
                 }
                 continue;
@@ -1007,12 +1094,14 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 KeyCode::Char('n') => {
                     input_mode = true;
                     input_buffer.clear();
+                    cursor_pos = 0;
                 }
 
                 KeyCode::Char('s') => {
                     if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         subtask_mode = true;
                         input_buffer.clear();
+                        cursor_pos = 0;
                     }
                 }
 
@@ -1027,6 +1116,36 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         edit_mode = true;
                         edit_idx = real_idx;
                         input_buffer = items[real_idx].text.clone();
+                        cursor_pos = input_buffer.len();
+                    }
+                }
+
+                // Move todo down
+                KeyCode::Char('J') => {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                        // Find next non-header item in same section
+                        let next = real_idx + 1;
+                        if next < items.len() && !items[next].is_header && items[next].is_subtask == items[real_idx].is_subtask {
+                            items.swap(real_idx, next);
+                            let new_vis = get_visible_indices(&items);
+                            if let Some(pos) = new_vis.iter().position(|&i| i == next) {
+                                state.select(Some(pos));
+                            }
+                        }
+                    }
+                }
+
+                // Move todo up
+                KeyCode::Char('K') => {
+                    if real_idx < items.len() && real_idx > 0 && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                        let prev = real_idx - 1;
+                        if !items[prev].is_header && items[prev].is_subtask == items[real_idx].is_subtask {
+                            items.swap(real_idx, prev);
+                            let new_vis = get_visible_indices(&items);
+                            if let Some(pos) = new_vis.iter().position(|&i| i == prev) {
+                                state.select(Some(pos));
+                            }
+                        }
                     }
                 }
 

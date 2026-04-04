@@ -116,8 +116,9 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | `a` / `/` | Almost done `[/]` |
 | `n` | New todo |
 | `s` | Add subtask |
-| `e` | Edit text |
+| `e` | Edit text (←/→ to move cursor) |
 | `d` | Delete (y/n confirm) |
+| `J` / `K` | Move todo down / up (reorder) |
 | `h` / `l` | Collapse / expand (subtasks + project sections) |
 | `v` | Toggle view all / collapse all |
 | `j` / `k` / mouse scroll | Navigate |
@@ -126,6 +127,12 @@ Multi-word titles work without quotes: `notez add my cool idea`
 **Todo states:** `[ ]` unchecked → `[/]` almost done → `[x]` checked
 
 **Subtasks:** One level deep. Parent state auto-derived from subtask completion.
+
+**Reorder:** `J`/`K` (shift) moves a todo up or down within its section and level.
+
+**Cursor navigation:** Arrow keys (←/→) move the cursor while editing or creating todos — no more backspace-only editing.
+
+**Local view:** `todoz` (no flags) shows both private and public todos side by side.
 
 **Code TODOs:** Automatically scans project source for `// TODO`, `# TODO`, `-- TODO`, `/* TODO`, `<!-- TODO` comments. Displayed as a read-only section with file path and line number — visible alongside your todos but non-interactive.
 
