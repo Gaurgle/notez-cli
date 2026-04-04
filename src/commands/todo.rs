@@ -545,15 +545,17 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 Span::styled(path_display, Style::default().fg(theme::OVERLAY)),
                             ]))
                         } else if item.is_code_todo {
-                            // Code TODOs: read-only, dimmed style with file path
-                            let indent = "      ";
-                            let text_width = (area.width as usize).saturating_sub(indent.len() + 8);
+                            // Code TODOs: read-only, prefixed with -, continuation indented
+                            let prefix = "    - ";
+                            let cont_indent = "        ";
+                            let text_width = (area.width as usize).saturating_sub(prefix.len() + 8);
                             if text_width > 0 && item.text.len() > text_width {
                                 let mut lines = vec![];
                                 let mut remaining = item.text.as_str();
                                 let mut first = true;
                                 while !remaining.is_empty() {
-                                    let split_at = remaining.len().min(text_width);
+                                    let w = if first { text_width } else { (area.width as usize).saturating_sub(cont_indent.len() + 8) };
+                                    let split_at = remaining.len().min(w);
                                     let split_at = if split_at < remaining.len() {
                                         remaining[..split_at].rfind(' ').unwrap_or(split_at)
                                     } else {
@@ -563,13 +565,13 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                     let rest = rest.trim_start();
                                     if first {
                                         lines.push(Line::from(vec![
-                                            Span::styled(indent, Style::default()),
+                                            Span::styled(prefix, Style::default().fg(theme::SURFACE)),
                                             Span::styled(chunk.to_string(), Style::default().fg(theme::OVERLAY)),
                                         ]));
                                         first = false;
                                     } else {
                                         lines.push(Line::from(vec![
-                                            Span::styled(indent, Style::default()),
+                                            Span::styled(cont_indent, Style::default()),
                                             Span::styled(chunk.to_string(), Style::default().fg(theme::OVERLAY)),
                                         ]));
                                     }
@@ -578,7 +580,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 ListItem::new(lines)
                             } else {
                                 ListItem::new(Line::from(vec![
-                                    Span::styled(indent, Style::default()),
+                                    Span::styled(prefix, Style::default().fg(theme::SURFACE)),
                                     Span::styled(item.text.clone(), Style::default().fg(theme::OVERLAY)),
                                 ]))
                             }
