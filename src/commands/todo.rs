@@ -19,6 +19,63 @@ enum CheckState {
     Checked,    // [x]
 }
 
+// Flag bitfield constants
+const FLAG_IMPORTANT: u8 = 1 << 0;
+const FLAG_PRIO: u8     = 1 << 1;
+const FLAG_LONGTERM: u8  = 1 << 2;
+const FLAG_IDEA: u8      = 1 << 3;
+const FLAG_BLOCKED: u8   = 1 << 4;
+
+const FLAG_DEFS: [(u8, &str, &str, &str); 5] = [
+    (FLAG_IMPORTANT, "important", "\u{f06a}", "important"),  //
+    (FLAG_PRIO,      "prio",     "\u{f0e7}", "priority"),    //
+    (FLAG_LONGTERM,  "longterm",  "\u{f017}", "long-term"),   //
+    (FLAG_IDEA,      "idea",     "\u{f0eb}", "idea"),         //
+    (FLAG_BLOCKED,   "blocked",  "\u{f05e}", "blocked"),      //
+];
+
+fn parse_flags(text: &str) -> (String, u8) {
+    let mut flags: u8 = 0;
+    let mut clean = text.to_string();
+    for &(bit, tag, _, _) in &FLAG_DEFS {
+        let marker = format!("#{}", tag);
+        if clean.contains(&marker) {
+            flags |= bit;
+            clean = clean.replace(&marker, "");
+        }
+    }
+    (clean.trim().to_string(), flags)
+}
+
+fn serialize_flags(flags: u8) -> String {
+    let mut out = String::new();
+    for &(bit, tag, _, _) in &FLAG_DEFS {
+        if flags & bit != 0 {
+            out.push_str(&format!(" #{}", tag));
+        }
+    }
+    out
+}
+
+fn flags_spans(flags: u8) -> Vec<Span<'static>> {
+    use ratatui::style::Color;
+    let mut spans = Vec::new();
+    let colors: [(u8, Color); 5] = [
+        (FLAG_IMPORTANT, Color::Rgb(243, 139, 168)),  // red
+        (FLAG_PRIO,      Color::Rgb(250, 179, 135)),  // peach
+        (FLAG_LONGTERM,  Color::Rgb(180, 190, 254)),  // lavender
+        (FLAG_IDEA,      Color::Rgb(249, 226, 175)),  // yellow
+        (FLAG_BLOCKED,   Color::Rgb(127, 132, 156)),  // overlay
+    ];
+    for &(bit, color) in &colors {
+        if flags & bit != 0 {
+            let icon = FLAG_DEFS.iter().find(|d| d.0 == bit).unwrap().2;
+            spans.push(Span::styled(format!("{} ", icon), Style::default().fg(color)));
+        }
+    }
+    spans
+}
+
 #[derive(Debug, Clone)]
 struct TodoItem {
     text: String,
@@ -26,10 +83,11 @@ struct TodoItem {
     source: PathBuf,
     project: String,
     is_header: bool,
-    is_subtask: bool,
+    depth: u8,          // 0 = top-level, 1 = subtask, 2 = sub-subtask
     has_subtasks: bool,
     collapsed: bool,
     is_code_todo: bool,
+    flags: u8,
 }
 
 /// Nerdfont icon for code TODOs
@@ -37,13 +95,19 @@ const ICON_CODE: &str = "\u{f121}"; // </> code icon
 
 // --- Parsing ---
 
-fn parse_todos_from_content(content: &str) -> Vec<(String, CheckState, bool)> {
+fn parse_todos_from_content(content: &str) -> Vec<(String, CheckState, u8, u8)> {
     content
         .lines()
         .filter_map(|line| {
-            let is_sub = line.starts_with("  - ") || line.starts_with("  -\t");
+            let depth = if line.starts_with("    - ") || line.starts_with("    -\t") {
+                2
+            } else if line.starts_with("  - ") || line.starts_with("  -\t") {
+                1
+            } else {
+                0
+            };
             let trimmed = line.trim();
-            let (text, state) = if trimmed.starts_with("- [ ] ") {
+            let (raw_text, state) = if trimmed.starts_with("- [ ] ") {
                 (trimmed[6..].to_string(), CheckState::Unchecked)
             } else if trimmed.starts_with("- [/] ") {
                 (trimmed[6..].to_string(), CheckState::Half)
@@ -52,7 +116,8 @@ fn parse_todos_from_content(content: &str) -> Vec<(String, CheckState, bool)> {
             } else {
                 return None;
             };
-            Some((text, state, is_sub))
+            let (text, flags) = parse_flags(&raw_text);
+            Some((text, state, depth, flags))
         })
         .collect()
 }
@@ -68,8 +133,9 @@ fn serialize_todos_for_file(items: &[TodoItem], source: &Path) -> String {
             CheckState::Half => "[/]",
             CheckState::Checked => "[x]",
         };
-        let indent = if item.is_subtask { "  " } else { "" };
-        out.push_str(&format!("{}- {} {}\n", indent, checkbox, item.text));
+        let indent = "  ".repeat(item.depth as usize);
+        let flag_tags = serialize_flags(item.flags);
+        out.push_str(&format!("{}- {} {}{}\n", indent, checkbox, item.text, flag_tags));
     }
     out
 }
@@ -82,10 +148,10 @@ fn load_single_todo(path: &Path, project_name: &str) -> Vec<TodoItem> {
     let parsed = parse_todos_from_content(&content);
     let mut items: Vec<TodoItem> = Vec::new();
 
-    for (text, state, is_sub) in parsed {
-        if is_sub {
-            // Mark the previous non-subtask item as having subtasks
-            if let Some(parent) = items.iter_mut().rev().find(|i| !i.is_subtask && !i.is_header) {
+    for (text, state, depth, flags) in parsed {
+        if depth > 0 {
+            // Mark the nearest shallower item as having subtasks
+            if let Some(parent) = items.iter_mut().rev().find(|i| !i.is_header && i.depth < depth) {
                 parent.has_subtasks = true;
             }
         }
@@ -95,10 +161,11 @@ fn load_single_todo(path: &Path, project_name: &str) -> Vec<TodoItem> {
             source: path.to_path_buf(),
             project: project_name.to_string(),
             is_header: false,
-            is_subtask: is_sub,
+            depth,
             has_subtasks: false,
             collapsed: false,
             is_code_todo: false,
+            flags,
         });
     }
 
@@ -107,23 +174,25 @@ fn load_single_todo(path: &Path, project_name: &str) -> Vec<TodoItem> {
     items
 }
 
-/// Recalculate parent check states based on their subtasks.
+/// Recalculate parent check states based on their direct children.
 fn derive_parent_states(items: &mut Vec<TodoItem>) {
     let len = items.len();
     for i in 0..len {
-        if items[i].is_header || items[i].is_subtask || !items[i].has_subtasks {
+        if items[i].is_header || !items[i].has_subtasks {
             continue;
         }
-        // Collect subtask states
+        let parent_depth = items[i].depth;
         let mut total = 0;
         let mut checked = 0;
         for j in (i + 1)..len {
-            if !items[j].is_subtask {
+            if items[j].depth <= parent_depth {
                 break;
             }
-            total += 1;
-            if items[j].state == CheckState::Checked {
-                checked += 1;
+            if items[j].depth == parent_depth + 1 {
+                total += 1;
+                if items[j].state == CheckState::Checked {
+                    checked += 1;
+                }
             }
         }
         if total == 0 {
@@ -136,6 +205,22 @@ fn derive_parent_states(items: &mut Vec<TodoItem>) {
         } else {
             CheckState::Half
         };
+    }
+}
+
+/// Aggregate flags from children onto headers.
+fn derive_header_flags(items: &mut Vec<TodoItem>) {
+    let len = items.len();
+    for i in 0..len {
+        if !items[i].is_header {
+            continue;
+        }
+        let mut agg: u8 = 0;
+        for j in (i + 1)..len {
+            if items[j].is_header { break; }
+            agg |= items[j].flags;
+        }
+        items[i].flags = agg;
     }
 }
 
@@ -216,10 +301,11 @@ fn scan_code_todos() -> Vec<TodoItem> {
             source: PathBuf::from(file),
             project: "code".to_string(),
             is_header: false,
-            is_subtask: false,
+            depth: 0,
             has_subtasks: false,
             collapsed: false,
             is_code_todo: true,
+            flags: 0,
         });
     }
 
@@ -242,10 +328,11 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
             source: path.clone(),
             project: project_name.clone(),
             is_header: true,
-            is_subtask: false,
+            depth: 0,
             has_subtasks: false,
             collapsed: false,
             is_code_todo: false,
+            flags: 0,
         });
         result.extend(load_single_todo(&path, &project_name));
     } else {
@@ -263,10 +350,11 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
                 source: private_path.clone(),
                 project: project_name.clone(),
                 is_header: true,
-                is_subtask: false,
+                depth: 0,
                 has_subtasks: false,
                 collapsed: false,
                 is_code_todo: false,
+            flags: 0,
             });
             result.extend(private_items);
         }
@@ -278,10 +366,11 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
                 source: public_path.clone(),
                 project: project_name.clone(),
                 is_header: true,
-                is_subtask: false,
+                depth: 0,
                 has_subtasks: false,
                 collapsed: false,
                 is_code_todo: false,
+            flags: 0,
             });
             result.extend(public_items);
         }
@@ -294,10 +383,11 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
                 source: private_path,
                 project: project_name.clone(),
                 is_header: true,
-                is_subtask: false,
+                depth: 0,
                 has_subtasks: false,
                 collapsed: false,
                 is_code_todo: false,
+            flags: 0,
             });
         }
     }
@@ -311,10 +401,11 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
             source: PathBuf::new(),
             project: "code".to_string(),
             is_header: true,
-            is_subtask: false,
+            depth: 0,
             has_subtasks: false,
             collapsed: false,
             is_code_todo: true,
+            flags: 0,
         });
         result.extend(code_todos);
     }
@@ -354,10 +445,11 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
             source: todo_path.clone(),
             project: dir_name,
             is_header: true,
-            is_subtask: false,
+            depth: 0,
             has_subtasks: false,
             collapsed: true,
             is_code_todo: false,
+            flags: 0,
         });
         all_items.extend(items);
     }
@@ -380,10 +472,11 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
             source: public_todo,
             project: name.clone(),
             is_header: true,
-            is_subtask: false,
+            depth: 0,
             has_subtasks: false,
             collapsed: true,
             is_code_todo: false,
+            flags: 0,
         });
         all_items.extend(items);
     }
@@ -397,10 +490,11 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         source: root_todo,
         project: "global".to_string(),
         is_header: true,
-        is_subtask: false,
+        depth: 0,
         has_subtasks: false,
         collapsed: true,
         is_code_todo: false,
+        flags: 0,
     }];
     result.extend(global_items);
     result.extend(all_items);
@@ -452,10 +546,11 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
                 source: path.clone(),
                 project: project_name,
                 is_header: false,
-                is_subtask: false,
+                depth: 0,
                 has_subtasks: false,
                 collapsed: false,
                 is_code_todo: false,
+            flags: 0,
             });
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).ok();
@@ -517,15 +612,14 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
 /// Get indices of visible items (skip items under collapsed headers/parents).
 fn get_visible_indices(items: &[TodoItem]) -> Vec<usize> {
     let mut visible = Vec::new();
-    let mut skip_section = false; // skip items under collapsed header
-    let mut skip_subtasks = false; // skip subtasks under collapsed parent
+    let mut skip_section = false;
+    let mut collapse_depth: Option<u8> = None; // skip items deeper than this
 
     for (i, item) in items.iter().enumerate() {
         if item.is_header {
-            // Headers are always visible
             visible.push(i);
             skip_section = item.collapsed;
-            skip_subtasks = false;
+            collapse_depth = None;
             continue;
         }
 
@@ -533,13 +627,17 @@ fn get_visible_indices(items: &[TodoItem]) -> Vec<usize> {
             continue;
         }
 
-        if item.is_subtask {
-            if !skip_subtasks {
-                visible.push(i);
+        if let Some(cd) = collapse_depth {
+            if item.depth > cd {
+                continue;
             }
-        } else {
-            skip_subtasks = item.has_subtasks && item.collapsed;
-            visible.push(i);
+            collapse_depth = None;
+        }
+
+        visible.push(i);
+
+        if item.has_subtasks && item.collapsed {
+            collapse_depth = Some(item.depth);
         }
     }
     visible
@@ -557,12 +655,14 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
     let mut edit_mode = false;
     let mut edit_idx: usize = 0;
     let mut input_buffer = String::new();
+    let mut flag_mode = false;
     let mut cursor_pos: usize = 0;
     let mut confirm_delete = false;
 
     loop {
-        // Derive parent states before each render
+        // Derive parent states and header flags before each render
         derive_parent_states(&mut items);
+        derive_header_flags(&mut items);
 
         terminal
             .draw(|frame| {
@@ -595,14 +695,18 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 .unwrap_or_default();
                             let header_color = if item.is_code_todo { theme::YELLOW } else { theme::MAUVE };
                             let collapse_icon = if item.collapsed { "▶ " } else { "▼ " };
-                            ListItem::new(Line::from(vec![
+                            let mut header_spans = vec![
                                 Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)),
                                 Span::styled(
                                     format!("── {} ", item.text),
                                     Style::default().fg(header_color).add_modifier(ratatui::style::Modifier::BOLD),
                                 ),
-                                Span::styled(path_display, Style::default().fg(theme::OVERLAY)),
-                            ]))
+                            ];
+                            if item.flags != 0 {
+                                header_spans.extend(flags_spans(item.flags));
+                            }
+                            header_spans.push(Span::styled(path_display, Style::default().fg(theme::OVERLAY)));
+                            ListItem::new(Line::from(header_spans))
                         } else if item.is_code_todo {
                             // Code TODOs: read-only, prefixed with -, continuation indented
                             let prefix = "    - ";
@@ -644,33 +748,41 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 ]))
                             }
                         } else {
-                            let (indent, collapse_icon) = if item.is_subtask {
-                                ("        ", "")
-                            } else if item.has_subtasks {
-                                if item.collapsed { ("  ", "▶ ") } else { ("  ", "▼ ") }
+                            let (indent, collapse_icon) = if item.has_subtasks {
+                                let pad = "  ".repeat(item.depth as usize);
+                                let icon = if item.collapsed { "▶ " } else { "▼ " };
+                                (pad, icon)
                             } else {
-                                ("    ", "")
+                                let pad = "  ".repeat(item.depth as usize + 1);
+                                (pad, "")
                             };
                             let (checkbox, style) = match item.state {
                                 CheckState::Checked => (
                                     "[x] ",
-                                    Style::default().fg(theme::OVERLAY).add_modifier(ratatui::style::Modifier::CROSSED_OUT),
+                                    Style::default().fg(theme::OVERLAY),
                                 ),
                                 CheckState::Half => (
                                     "[/] ",
-                                    Style::default().fg(theme::YELLOW),
+                                    Style::default().fg(theme::SUBTEXT),
                                 ),
                                 CheckState::Unchecked => (
                                     "[ ] ",
                                     Style::default().fg(theme::TEXT),
                                 ),
                             };
+                            // Subtly dim checkbox brackets per depth
                             let checkbox_color = match item.state {
                                 CheckState::Checked => theme::SURFACE,
-                                CheckState::Half => theme::YELLOW,
-                                CheckState::Unchecked => theme::SAPPHIRE,
+                                CheckState::Half => theme::LAVENDER,
+                                CheckState::Unchecked => match item.depth {
+                                    0 => theme::SAPPHIRE,                  // Rgb(116, 199, 236)
+                                    1 => Color::Rgb(86, 169, 206),
+                                    _ => Color::Rgb(56, 139, 176),
+                                },
                             };
-                            let prefix_len = indent.len() + collapse_icon.len() + checkbox.len();
+                            let flag_icons = flags_spans(item.flags);
+                            let flag_width: usize = if item.flags != 0 { flag_icons.len() * 2 } else { 0 };
+                            let prefix_len = indent.len() + collapse_icon.len() + checkbox.len() + flag_width;
                             let text_width = (area.width as usize).saturating_sub(prefix_len + 8); // 8 for padding/borders/highlight
 
                             if text_width > 0 && item.text.len() > text_width {
@@ -689,12 +801,14 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                     let rest = rest.trim_start();
 
                                     if first {
-                                        lines.push(Line::from(vec![
-                                            Span::styled(indent, Style::default()),
+                                        let mut spans = vec![
+                                            Span::styled(indent.clone(), Style::default()),
                                             Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)),
                                             Span::styled(checkbox, Style::default().fg(checkbox_color)),
-                                            Span::styled(chunk.to_string(), style),
-                                        ]));
+                                        ];
+                                        spans.extend(flags_spans(item.flags));
+                                        spans.push(Span::styled(chunk.to_string(), style));
+                                        lines.push(Line::from(spans));
                                         first = false;
                                     } else {
                                         let wrap_indent = " ".repeat(prefix_len);
@@ -707,19 +821,21 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 }
                                 ListItem::new(lines)
                             } else {
-                                ListItem::new(Line::from(vec![
+                                let mut spans = vec![
                                     Span::styled(indent, Style::default()),
                                     Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)),
                                     Span::styled(checkbox, Style::default().fg(checkbox_color)),
-                                    Span::styled(item.text.clone(), style),
-                                ]))
+                                ];
+                                spans.extend(flag_icons);
+                                spans.push(Span::styled(item.text.clone(), style));
+                                ListItem::new(Line::from(spans))
                             }
                         }
                     })
                     .collect();
 
-                let todo_count = items.iter().filter(|i| !i.is_header && !i.is_subtask && !i.is_code_todo && i.state != CheckState::Checked).count();
-                let done_count = items.iter().filter(|i| !i.is_header && !i.is_subtask && !i.is_code_todo && i.state == CheckState::Checked).count();
+                let todo_count = items.iter().filter(|i| !i.is_header && i.depth == 0 && !i.is_code_todo && i.state != CheckState::Checked).count();
+                let done_count = items.iter().filter(|i| !i.is_header && i.depth == 0 && !i.is_code_todo && i.state == CheckState::Checked).count();
 
                 let title = Line::from(vec![
                     Span::styled(format!(" {} ", tui_title), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
@@ -753,6 +869,28 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         Span::styled("n", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
                         Span::styled("o", Style::default().fg(theme::OVERLAY)),
                     ])
+                } else if flag_mode {
+                    let vis = get_visible_indices(&items);
+                    let vs = state.selected().unwrap_or(0);
+                    let ri = vis.get(vs).copied().unwrap_or(0);
+                    let cur_flags = if ri < items.len() { items[ri].flags } else { 0 };
+                    let mut spans = vec![
+                        Span::styled(" flags: ", Style::default().fg(theme::MAUVE)),
+                    ];
+                    for (idx, &(bit, _, icon, label)) in FLAG_DEFS.iter().enumerate() {
+                        let num = format!("{}:", idx + 1);
+                        let active = cur_flags & bit != 0;
+                        let colors: [Color; 5] = [
+                            Color::Rgb(243, 139, 168), Color::Rgb(250, 179, 135),
+                            Color::Rgb(180, 190, 254), Color::Rgb(249, 226, 175),
+                            Color::Rgb(127, 132, 156),
+                        ];
+                        let color = if active { colors[idx] } else { theme::SURFACE };
+                        spans.push(Span::styled(num, Style::default().fg(theme::TEXT)));
+                        spans.push(Span::styled(format!("{} ", icon), Style::default().fg(color)));
+                        spans.push(Span::styled(format!("{}  ", label), Style::default().fg(if active { color } else { theme::OVERLAY })));
+                    }
+                    Line::from(spans)
                 } else if input_mode || subtask_mode || edit_mode {
                     let label = if edit_mode { " edit: " } else if subtask_mode { " subtask: " } else { " new: " };
                     let (before, after) = input_buffer.split_at(cursor_pos.min(input_buffer.len()));
@@ -780,7 +918,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         String::new()
                     };
 
-                    let left = " xheck  almost  new  subtask  edit  delete  view all";
+                    let left = " xheck  almost  new  subtask  edit  flags  delete  view all";
                     let right_len = 4 + scroll_info.len();
                     let padding = width.saturating_sub(left.len() + right_len);
                     Line::from(vec![
@@ -795,6 +933,8 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         Span::styled("ubtask  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("e", Style::default().fg(theme::MAUVE).add_modifier(bold)),
                         Span::styled("dit  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("f", Style::default().fg(theme::PEACH).add_modifier(bold)),
+                        Span::styled("lags  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("d", Style::default().fg(theme::RED).add_modifier(bold)),
                         Span::styled("elete  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("v", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
@@ -845,8 +985,9 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         let ri = vis.get(vs).copied().unwrap_or(0);
                         if ri < items.len() && !items[ri].is_header {
                             if items[ri].has_subtasks {
+                                let parent_depth = items[ri].depth;
                                 let mut end = ri + 1;
-                                while end < items.len() && items[end].is_subtask {
+                                while end < items.len() && items[end].depth > parent_depth {
                                     end += 1;
                                 }
                                 items.drain(ri..end);
@@ -861,6 +1002,29 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         confirm_delete = false;
                     }
                     _ => { confirm_delete = false; }
+                }
+                continue;
+            }
+
+            // Flag mode
+            if flag_mode {
+                match key.code {
+                    KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Char('3') |
+                    KeyCode::Char('4') | KeyCode::Char('5') => {
+                        let idx = match key.code {
+                            KeyCode::Char(c) => (c as u8 - b'1') as usize,
+                            _ => unreachable!(),
+                        };
+                        if idx < FLAG_DEFS.len() {
+                            let vis = get_visible_indices(&items);
+                            let vs = state.selected().unwrap_or(0);
+                            let ri = vis.get(vs).copied().unwrap_or(0);
+                            if ri < items.len() && !items[ri].is_header && !items[ri].is_code_todo {
+                                items[ri].flags ^= FLAG_DEFS[idx].0;
+                            }
+                        }
+                    }
+                    _ => { flag_mode = false; }
                 }
                 continue;
             }
@@ -884,10 +1048,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 source,
                                 project,
                                 is_header: false,
-                                is_subtask: false,
+                                depth: 0,
                                 has_subtasks: false,
                                 collapsed: false,
                                 is_code_todo: false,
+            flags: 0,
                             });
                             let new_vis = get_visible_indices(&items);
                             if let Some(pos) = new_vis.iter().position(|&i| i == insert_at) {
@@ -921,24 +1086,22 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                             let vis = get_visible_indices(&items);
                             let vs = state.selected().unwrap_or(0);
                             let ri = vis.get(vs).copied().unwrap_or(0);
-                            let parent_idx = if items[ri].is_subtask {
-                                (0..ri).rev().find(|&i| !items[i].is_subtask && !items[i].is_header).unwrap_or(ri)
-                            } else if !items[ri].is_header {
-                                ri
-                            } else {
-                                // Can't add subtask to header
+                            let parent_idx = if items[ri].is_header || items[ri].depth >= 2 {
                                 input_buffer.clear();
                                 subtask_mode = false;
                                 continue;
+                            } else {
+                                ri
                             };
 
+                            let child_depth = items[parent_idx].depth + 1;
                             items[parent_idx].has_subtasks = true;
                             let source = items[parent_idx].source.clone();
                             let project = items[parent_idx].project.clone();
 
-                            // Insert after the last subtask of this parent
+                            // Insert after the last child of this parent
                             let mut insert_at = parent_idx + 1;
-                            while insert_at < items.len() && items[insert_at].is_subtask {
+                            while insert_at < items.len() && items[insert_at].depth > items[parent_idx].depth {
                                 insert_at += 1;
                             }
 
@@ -948,10 +1111,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 source,
                                 project,
                                 is_header: false,
-                                is_subtask: true,
+                                depth: child_depth,
                                 has_subtasks: false,
                                 collapsed: false,
                                 is_code_todo: false,
+            flags: 0,
                             });
                             // Expand parent if collapsed
                             items[parent_idx].collapsed = false;
@@ -1057,10 +1221,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 KeyCode::Char(' ') | KeyCode::Char('x') | KeyCode::Enter => {
                     if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         if items[real_idx].has_subtasks {
+                            let parent_depth = items[real_idx].depth;
                             let all_checked = {
                                 let mut j = real_idx + 1;
                                 let mut all = true;
-                                while j < items.len() && items[j].is_subtask {
+                                while j < items.len() && items[j].depth > parent_depth {
                                     if items[j].state != CheckState::Checked { all = false; }
                                     j += 1;
                                 }
@@ -1068,7 +1233,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                             };
                             let new_state = if all_checked { CheckState::Unchecked } else { CheckState::Checked };
                             let mut j = real_idx + 1;
-                            while j < items.len() && items[j].is_subtask {
+                            while j < items.len() && items[j].depth > parent_depth {
                                 items[j].state = new_state.clone();
                                 j += 1;
                             }
@@ -1098,7 +1263,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 }
 
                 KeyCode::Char('s') => {
-                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo && items[real_idx].depth < 2 {
                         subtask_mode = true;
                         input_buffer.clear();
                         cursor_pos = 0;
@@ -1120,12 +1285,18 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                     }
                 }
 
+                KeyCode::Char('f') => {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                        flag_mode = true;
+                    }
+                }
+
                 // Move todo down
                 KeyCode::Char('J') => {
                     if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         // Find next non-header item in same section
                         let next = real_idx + 1;
-                        if next < items.len() && !items[next].is_header && items[next].is_subtask == items[real_idx].is_subtask {
+                        if next < items.len() && !items[next].is_header && items[next].depth == items[real_idx].depth {
                             items.swap(real_idx, next);
                             let new_vis = get_visible_indices(&items);
                             if let Some(pos) = new_vis.iter().position(|&i| i == next) {
@@ -1139,7 +1310,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 KeyCode::Char('K') => {
                     if real_idx < items.len() && real_idx > 0 && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         let prev = real_idx - 1;
-                        if !items[prev].is_header && items[prev].is_subtask == items[real_idx].is_subtask {
+                        if !items[prev].is_header && items[prev].depth == items[real_idx].depth {
                             items.swap(real_idx, prev);
                             let new_vis = get_visible_indices(&items);
                             if let Some(pos) = new_vis.iter().position(|&i| i == prev) {
@@ -1189,22 +1360,23 @@ mod tests {
 
     #[test]
     fn parse_subtasks() {
-        let content = "- [ ] parent\n  - [ ] sub1\n  - [x] sub2\n- [ ] other\n";
+        let content = "- [ ] parent\n  - [ ] sub1\n  - [x] sub2\n    - [ ] subsub\n- [ ] other\n";
         let items = parse_todos_from_content(content);
-        assert_eq!(items.len(), 4);
-        assert!(!items[0].2); // parent
-        assert!(items[1].2);  // subtask
-        assert!(items[2].2);  // subtask
-        assert!(!items[3].2); // not subtask
+        assert_eq!(items.len(), 5);
+        assert_eq!(items[0].2, 0); // parent
+        assert_eq!(items[1].2, 1); // subtask
+        assert_eq!(items[2].2, 1); // subtask
+        assert_eq!(items[3].2, 2); // sub-subtask
+        assert_eq!(items[4].2, 0); // top-level
     }
 
     #[test]
     fn derive_parent_from_subtasks() {
         let source = PathBuf::from("/tmp/TODO.md");
         let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false, is_code_todo: false },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
+            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, depth: 0, has_subtasks: true, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
         ];
         derive_parent_states(&mut items);
         assert_eq!(items[0].state, CheckState::Half); // 1 of 2 done
@@ -1214,9 +1386,9 @@ mod tests {
     fn derive_parent_all_done() {
         let source = PathBuf::from("/tmp/TODO.md");
         let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false, is_code_todo: false },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
+            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, depth: 0, has_subtasks: true, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem { text: "sub2".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
         ];
         derive_parent_states(&mut items);
         assert_eq!(items[0].state, CheckState::Checked); // all done
@@ -1226,9 +1398,9 @@ mod tests {
     fn serialize_with_subtasks() {
         let source = PathBuf::from("/tmp/TODO.md");
         let items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Half, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false, is_code_todo: false },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
+            TodoItem { text: "parent".into(), state: CheckState::Half, source: source.clone(), project: "t".into(), is_header: false, depth: 0, has_subtasks: true, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
         ];
         let md = serialize_todos_for_file(&items, &source);
         assert!(md.contains("- [/] parent"));
@@ -1246,8 +1418,8 @@ mod tests {
     fn roundtrip_preserves_items() {
         let source = PathBuf::from("/tmp/test/TODO.md");
         let items = vec![
-            TodoItem { text: "buy milk".into(), state: CheckState::Unchecked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false, collapsed: false, is_code_todo: false },
-            TodoItem { text: "fix bug".into(), state: CheckState::Checked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false, collapsed: false, is_code_todo: false },
+            TodoItem { text: "buy milk".into(), state: CheckState::Unchecked, source: source.clone(), project: "test".into(), is_header: false, depth: 0, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem { text: "fix bug".into(), state: CheckState::Checked, source: source.clone(), project: "test".into(), is_header: false, depth: 0, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
         ];
         let md = serialize_todos_for_file(&items, &source);
         let parsed = parse_todos_from_content(&md);

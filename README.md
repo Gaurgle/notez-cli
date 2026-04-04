@@ -126,7 +126,7 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 **Todo states:** `[ ]` unchecked → `[/]` almost done → `[x]` checked
 
-**Subtasks:** One level deep. Parent state auto-derived from subtask completion.
+**Subtasks:** Two levels deep — press `s` on any todo or subtask to nest under it. Parent state auto-derived from child completion.
 
 **Reorder:** `J`/`K` (shift) moves a todo up or down within its section and level.
 
