@@ -119,6 +119,7 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | `e` | Edit text |
 | `d` | Delete (y/n confirm) |
 | `h` / `l` | Collapse / expand (subtasks + project sections) |
+| `v` | Toggle view all / collapse all |
 | `j` / `k` / mouse scroll | Navigate |
 | `q` / `Esc` / `Ctrl+C` / `:wq` | Quit |
 
