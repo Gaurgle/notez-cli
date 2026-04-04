@@ -29,7 +29,11 @@ struct TodoItem {
     is_subtask: bool,
     has_subtasks: bool,
     collapsed: bool,
+    is_code_todo: bool,
 }
+
+/// Nerdfont icon for code TODOs
+const ICON_CODE: &str = "\u{f121}"; // </> code icon
 
 // --- Parsing ---
 
@@ -56,7 +60,7 @@ fn parse_todos_from_content(content: &str) -> Vec<(String, CheckState, bool)> {
 fn serialize_todos_for_file(items: &[TodoItem], source: &Path) -> String {
     let mut out = String::from("# TODO\n\n");
     for item in items {
-        if item.is_header || item.source != source {
+        if item.is_header || item.is_code_todo || item.source != source {
             continue;
         }
         let checkbox = match item.state {
@@ -94,6 +98,7 @@ fn load_single_todo(path: &Path, project_name: &str) -> Vec<TodoItem> {
             is_subtask: is_sub,
             has_subtasks: false,
             collapsed: false,
+            is_code_todo: false,
         });
     }
 
@@ -134,6 +139,93 @@ fn derive_parent_states(items: &mut Vec<TodoItem>) {
     }
 }
 
+// --- Code TODO Scanner ---
+
+fn scan_code_todos() -> Vec<TodoItem> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let mut results = Vec::new();
+
+    // Use rg if available, fall back to grep
+    let output = std::process::Command::new("rg")
+        .args([
+            "--line-number",
+            "--no-heading",
+            "--glob", "!.notez/**",
+            "--glob", "!notez/**",
+            "--glob", "!node_modules/**",
+            "--glob", "!target/**",
+            "--glob", "!.git/**",
+            "--glob", "!*.md",
+            r"(?://|#|--|/\*|<!--)\s*TODO\b",
+        ])
+        .current_dir(&cwd)
+        .output();
+
+    let lines = match output {
+        Ok(o) if o.status.success() => {
+            String::from_utf8_lossy(&o.stdout).to_string()
+        }
+        _ => {
+            // Fallback to grep
+            let o = std::process::Command::new("grep")
+                .args([
+                    "-rn",
+                    "--include=*.rs", "--include=*.ts", "--include=*.js",
+                    "--include=*.py", "--include=*.go", "--include=*.java",
+                    "--include=*.kt", "--include=*.c", "--include=*.cpp",
+                    "--include=*.h", "--include=*.sh", "--include=*.toml",
+                    "--include=*.yaml", "--include=*.yml",
+                    "TODO",
+                ])
+                .current_dir(&cwd)
+                .output();
+            match o {
+                Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+                Err(_) => return results,
+            }
+        }
+    };
+
+    for line in lines.lines() {
+        // Format: file:line:content
+        let parts: Vec<&str> = line.splitn(3, ':').collect();
+        if parts.len() < 3 {
+            continue;
+        }
+        let file = parts[0];
+        let line_num = parts[1];
+        let content = parts[2].trim();
+
+        // Extract the TODO text after the comment marker
+        let todo_text = content
+            .trim_start_matches("//")
+            .trim_start_matches('#')
+            .trim_start_matches("--")
+            .trim_start_matches("/*")
+            .trim_start_matches("<!--")
+            .trim()
+            .trim_start_matches("TODO")
+            .trim_start_matches(':')
+            .trim();
+
+        let display = format!("{}:{} {}", file, line_num, todo_text);
+
+        results.push(TodoItem {
+            text: display,
+            state: CheckState::Unchecked,
+            source: PathBuf::from(file),
+            project: "code".to_string(),
+            is_header: false,
+            is_subtask: false,
+            has_subtasks: false,
+            collapsed: false,
+            is_code_todo: true,
+        });
+    }
+
+    results
+}
+
 // --- Loading ---
 
 fn load_local_todos(config: &Config, public: bool) -> Vec<TodoItem> {
@@ -152,8 +244,27 @@ fn load_local_todos(config: &Config, public: bool) -> Vec<TodoItem> {
         is_subtask: false,
         has_subtasks: false,
         collapsed: false,
+        is_code_todo: false,
     }];
     result.extend(load_single_todo(&path, &result[0].project));
+
+    // Scan code TODOs
+    let code_todos = scan_code_todos();
+    if !code_todos.is_empty() {
+        result.push(TodoItem {
+            text: format!("{} code TODOs  ({} found)", ICON_CODE, code_todos.len()),
+            state: CheckState::Unchecked,
+            source: PathBuf::new(),
+            project: "code".to_string(),
+            is_header: true,
+            is_subtask: false,
+            has_subtasks: false,
+            collapsed: false,
+            is_code_todo: true,
+        });
+        result.extend(code_todos);
+    }
+
     result
 }
 
@@ -192,6 +303,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
             is_subtask: false,
             has_subtasks: false,
             collapsed: false,
+            is_code_todo: false,
         });
         all_items.extend(items);
     }
@@ -217,6 +329,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
             is_subtask: false,
             has_subtasks: false,
             collapsed: false,
+            is_code_todo: false,
         });
         all_items.extend(items);
     }
@@ -233,6 +346,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         is_subtask: false,
         has_subtasks: false,
         collapsed: false,
+        is_code_todo: false,
     }];
     result.extend(global_items);
     result.extend(all_items);
@@ -287,6 +401,7 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
                 is_subtask: false,
                 has_subtasks: false,
                 collapsed: false,
+                is_code_todo: false,
             });
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).ok();
@@ -406,12 +521,19 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                     s.replacen(&home, "~", 1)
                                 })
                                 .unwrap_or_default();
+                            let header_color = if item.is_code_todo { theme::YELLOW } else { theme::MAUVE };
                             ListItem::new(Line::from(vec![
                                 Span::styled(
                                     format!("  ── {} ", item.text),
-                                    Style::default().fg(theme::MAUVE).add_modifier(ratatui::style::Modifier::BOLD),
+                                    Style::default().fg(header_color).add_modifier(ratatui::style::Modifier::BOLD),
                                 ),
                                 Span::styled(path_display, Style::default().fg(theme::OVERLAY)),
+                            ]))
+                        } else if item.is_code_todo {
+                            // Code TODOs: read-only, dimmed style with file path
+                            ListItem::new(Line::from(vec![
+                                Span::styled("      ", Style::default()),
+                                Span::styled(item.text.clone(), Style::default().fg(theme::OVERLAY)),
                             ]))
                         } else {
                             let (indent, collapse_icon) = if item.is_subtask {
@@ -488,8 +610,8 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                     })
                     .collect();
 
-                let todo_count = items.iter().filter(|i| !i.is_header && !i.is_subtask && i.state != CheckState::Checked).count();
-                let done_count = items.iter().filter(|i| !i.is_header && !i.is_subtask && i.state == CheckState::Checked).count();
+                let todo_count = items.iter().filter(|i| !i.is_header && !i.is_subtask && !i.is_code_todo && i.state != CheckState::Checked).count();
+                let done_count = items.iter().filter(|i| !i.is_header && !i.is_subtask && !i.is_code_todo && i.state == CheckState::Checked).count();
 
                 let title = Line::from(vec![
                     Span::styled(format!(" {} ", tui_title), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
@@ -618,6 +740,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 is_subtask: false,
                                 has_subtasks: false,
                                 collapsed: false,
+                                is_code_todo: false,
                             });
                             let new_vis = get_visible_indices(&items);
                             if let Some(pos) = new_vis.iter().position(|&i| i == insert_at) {
@@ -673,6 +796,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 is_subtask: true,
                                 has_subtasks: false,
                                 collapsed: false,
+                                is_code_todo: false,
                             });
                             // Expand parent if collapsed
                             items[parent_idx].collapsed = false;
@@ -747,7 +871,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 }
 
                 KeyCode::Char(' ') | KeyCode::Char('x') | KeyCode::Enter => {
-                    if real_idx < items.len() && !items[real_idx].is_header {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         if items[real_idx].has_subtasks {
                             let all_checked = {
                                 let mut j = real_idx + 1;
@@ -775,7 +899,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 }
 
                 KeyCode::Char('/') | KeyCode::Char('a') => {
-                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].has_subtasks {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].has_subtasks && !items[real_idx].is_code_todo {
                         items[real_idx].state = match items[real_idx].state {
                             CheckState::Half => CheckState::Unchecked,
                             _ => CheckState::Half,
@@ -789,20 +913,20 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 }
 
                 KeyCode::Char('s') => {
-                    if real_idx < items.len() && !items[real_idx].is_header {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         subtask_mode = true;
                         input_buffer.clear();
                     }
                 }
 
                 KeyCode::Char('d') => {
-                    if real_idx < items.len() && !items[real_idx].is_header {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         confirm_delete = true;
                     }
                 }
 
                 KeyCode::Char('e') => {
-                    if real_idx < items.len() && !items[real_idx].is_header {
+                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
                         edit_mode = true;
                         edit_idx = real_idx;
                         input_buffer = items[real_idx].text.clone();
@@ -862,9 +986,9 @@ mod tests {
     fn derive_parent_from_subtasks() {
         let source = PathBuf::from("/tmp/TODO.md");
         let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
+            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false, is_code_todo: false },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
+            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
         ];
         derive_parent_states(&mut items);
         assert_eq!(items[0].state, CheckState::Half); // 1 of 2 done
@@ -874,9 +998,9 @@ mod tests {
     fn derive_parent_all_done() {
         let source = PathBuf::from("/tmp/TODO.md");
         let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
+            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false, is_code_todo: false },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
+            TodoItem { text: "sub2".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
         ];
         derive_parent_states(&mut items);
         assert_eq!(items[0].state, CheckState::Checked); // all done
@@ -886,9 +1010,9 @@ mod tests {
     fn serialize_with_subtasks() {
         let source = PathBuf::from("/tmp/TODO.md");
         let items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Half, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
-            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false },
+            TodoItem { text: "parent".into(), state: CheckState::Half, source: source.clone(), project: "t".into(), is_header: false, is_subtask: false, has_subtasks: true, collapsed: false, is_code_todo: false },
+            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
+            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, is_subtask: true, has_subtasks: false, collapsed: false, is_code_todo: false },
         ];
         let md = serialize_todos_for_file(&items, &source);
         assert!(md.contains("- [/] parent"));
@@ -906,8 +1030,8 @@ mod tests {
     fn roundtrip_preserves_items() {
         let source = PathBuf::from("/tmp/test/TODO.md");
         let items = vec![
-            TodoItem { text: "buy milk".into(), state: CheckState::Unchecked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false, collapsed: false },
-            TodoItem { text: "fix bug".into(), state: CheckState::Checked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false, collapsed: false },
+            TodoItem { text: "buy milk".into(), state: CheckState::Unchecked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false, collapsed: false, is_code_todo: false },
+            TodoItem { text: "fix bug".into(), state: CheckState::Checked, source: source.clone(), project: "test".into(), is_header: false, is_subtask: false, has_subtasks: false, collapsed: false, is_code_todo: false },
         ];
         let md = serialize_todos_for_file(&items, &source);
         let parsed = parse_todos_from_content(&md);
