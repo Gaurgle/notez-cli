@@ -546,10 +546,42 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                             ]))
                         } else if item.is_code_todo {
                             // Code TODOs: read-only, dimmed style with file path
-                            ListItem::new(Line::from(vec![
-                                Span::styled("      ", Style::default()),
-                                Span::styled(item.text.clone(), Style::default().fg(theme::OVERLAY)),
-                            ]))
+                            let indent = "      ";
+                            let text_width = (area.width as usize).saturating_sub(indent.len() + 8);
+                            if text_width > 0 && item.text.len() > text_width {
+                                let mut lines = vec![];
+                                let mut remaining = item.text.as_str();
+                                let mut first = true;
+                                while !remaining.is_empty() {
+                                    let split_at = remaining.len().min(text_width);
+                                    let split_at = if split_at < remaining.len() {
+                                        remaining[..split_at].rfind(' ').unwrap_or(split_at)
+                                    } else {
+                                        split_at
+                                    };
+                                    let (chunk, rest) = remaining.split_at(split_at);
+                                    let rest = rest.trim_start();
+                                    if first {
+                                        lines.push(Line::from(vec![
+                                            Span::styled(indent, Style::default()),
+                                            Span::styled(chunk.to_string(), Style::default().fg(theme::OVERLAY)),
+                                        ]));
+                                        first = false;
+                                    } else {
+                                        lines.push(Line::from(vec![
+                                            Span::styled(indent, Style::default()),
+                                            Span::styled(chunk.to_string(), Style::default().fg(theme::OVERLAY)),
+                                        ]));
+                                    }
+                                    remaining = rest;
+                                }
+                                ListItem::new(lines)
+                            } else {
+                                ListItem::new(Line::from(vec![
+                                    Span::styled(indent, Style::default()),
+                                    Span::styled(item.text.clone(), Style::default().fg(theme::OVERLAY)),
+                                ]))
+                            }
                         } else {
                             let (indent, collapse_icon) = if item.is_subtask {
                                 ("        ", "")
