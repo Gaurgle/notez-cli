@@ -717,8 +717,8 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         String::new()
                     };
 
-                    let left = " xheck  almost  new  subtask  edit  delete";
-                    let right_len = 4 + scroll_info.len(); // "quit" + scroll
+                    let left = " xheck  almost  new  subtask  edit  delete  collapse  view all";
+                    let right_len = 4 + scroll_info.len();
                     let padding = width.saturating_sub(left.len() + right_len);
                     Line::from(vec![
                         Span::styled(" ", Style::default()),
@@ -733,7 +733,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         Span::styled("e", Style::default().fg(theme::MAUVE).add_modifier(bold)),
                         Span::styled("dit  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("d", Style::default().fg(theme::RED).add_modifier(bold)),
-                        Span::styled("elete", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("elete  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("c", Style::default().fg(theme::OVERLAY).add_modifier(bold)),
+                        Span::styled("ollapse  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("v", Style::default().fg(theme::OVERLAY).add_modifier(bold)),
+                        Span::styled("iew all", Style::default().fg(theme::OVERLAY)),
                         Span::styled(" ".repeat(padding), Style::default()),
                         Span::styled(scroll_info, Style::default().fg(theme::OVERLAY)),
                         Span::styled("q", Style::default().fg(theme::PEACH).add_modifier(bold)),
@@ -953,13 +957,20 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 }
 
                 KeyCode::Char('c') => {
-                    // Collapse all headers and subtask parents
+                    // Collapse all
                     for item in items.iter_mut() {
                         if item.is_header || item.has_subtasks {
                             item.collapsed = true;
                         }
                     }
                     state.select(Some(0));
+                }
+
+                KeyCode::Char('v') => {
+                    // Expand all
+                    for item in items.iter_mut() {
+                        item.collapsed = false;
+                    }
                 }
 
                 KeyCode::Char(' ') | KeyCode::Char('x') | KeyCode::Enter => {
