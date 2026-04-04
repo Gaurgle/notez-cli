@@ -5,8 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crossterm::{
-    event::KeyCode,
-    event::KeyEvent,
+    event::{EnableMouseCapture, DisableMouseCapture, KeyCode, KeyEvent},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
@@ -14,23 +13,24 @@ use ratatui::prelude::*;
 
 pub type Terminal = ratatui::Terminal<CrosstermBackend<io::Stdout>>;
 
-/// Enter the TUI: raw mode + alternate screen. Returns the Terminal.
+/// Enter the TUI: raw mode + alternate screen + mouse capture.
 pub fn enter() -> io::Result<Terminal> {
     enable_raw_mode()?;
     io::stdout().execute(EnterAlternateScreen)?;
+    io::stdout().execute(EnableMouseCapture)?;
     let backend = CrosstermBackend::new(io::stdout());
     ratatui::Terminal::new(backend)
 }
 
 /// Leave the TUI: restore terminal state.
 pub fn leave() -> io::Result<()> {
+    io::stdout().execute(DisableMouseCapture)?;
     disable_raw_mode()?;
     io::stdout().execute(LeaveAlternateScreen)?;
     Ok(())
 }
 
 /// Open a file in $EDITOR, then restore the TUI.
-/// Leaves alternate screen, runs editor, re-enters alternate screen.
 pub fn open_in_editor(editor: &str, file: &Path) -> io::Result<()> {
     leave()?;
     Command::new(editor)
@@ -39,6 +39,7 @@ pub fn open_in_editor(editor: &str, file: &Path) -> io::Result<()> {
         .expect("failed to launch editor");
     enable_raw_mode()?;
     io::stdout().execute(EnterAlternateScreen)?;
+    io::stdout().execute(EnableMouseCapture)?;
     Ok(())
 }
 

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, MouseEventKind};
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Padding, Paragraph};
 
@@ -302,7 +302,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
             is_header: true,
             is_subtask: false,
             has_subtasks: false,
-            collapsed: false,
+            collapsed: true,
             is_code_todo: false,
         });
         all_items.extend(items);
@@ -328,7 +328,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
             is_header: true,
             is_subtask: false,
             has_subtasks: false,
-            collapsed: false,
+            collapsed: true,
             is_code_todo: false,
         });
         all_items.extend(items);
@@ -345,7 +345,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         is_header: true,
         is_subtask: false,
         has_subtasks: false,
-        collapsed: false,
+        collapsed: true,
         is_code_todo: false,
     }];
     result.extend(global_items);
@@ -456,12 +456,25 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
 
 // --- TUI ---
 
-/// Get indices of visible items (skip subtasks of collapsed parents).
+/// Get indices of visible items (skip items under collapsed headers/parents).
 fn get_visible_indices(items: &[TodoItem]) -> Vec<usize> {
     let mut visible = Vec::new();
-    let mut skip_subtasks = false;
+    let mut skip_section = false; // skip items under collapsed header
+    let mut skip_subtasks = false; // skip subtasks under collapsed parent
 
     for (i, item) in items.iter().enumerate() {
+        if item.is_header {
+            // Headers are always visible
+            visible.push(i);
+            skip_section = item.collapsed;
+            skip_subtasks = false;
+            continue;
+        }
+
+        if skip_section {
+            continue;
+        }
+
         if item.is_subtask {
             if !skip_subtasks {
                 visible.push(i);
@@ -522,9 +535,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                 })
                                 .unwrap_or_default();
                             let header_color = if item.is_code_todo { theme::YELLOW } else { theme::MAUVE };
+                            let collapse_icon = if item.collapsed { "▶ " } else { "▼ " };
                             ListItem::new(Line::from(vec![
+                                Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)),
                                 Span::styled(
-                                    format!("  ── {} ", item.text),
+                                    format!("── {} ", item.text),
                                     Style::default().fg(header_color).add_modifier(ratatui::style::Modifier::BOLD),
                                 ),
                                 Span::styled(path_display, Style::default().fg(theme::OVERLAY)),
@@ -658,9 +673,19 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                     ])
                 } else {
                     let width = chunks[1].width as usize;
+                    // Scroll indicator
+                    let list_height = chunks[0].height.saturating_sub(4) as usize; // borders + padding
+                    let scroll_info = if visible.len() > list_height {
+                        let pos = state.selected().unwrap_or(0) + 1;
+                        let total = visible.len();
+                        format!(" {}/{} ", pos, total)
+                    } else {
+                        String::new()
+                    };
+
                     let left = " xheck  almost  new  subtask  edit  delete";
-                    let right = "quit ";
-                    let padding = width.saturating_sub(left.len() + right.len());
+                    let right_len = 4 + scroll_info.len(); // "quit" + scroll
+                    let padding = width.saturating_sub(left.len() + right_len);
                     Line::from(vec![
                         Span::styled(" ", Style::default()),
                         Span::styled("x", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
@@ -676,6 +701,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                         Span::styled("d", Style::default().fg(theme::RED).add_modifier(bold)),
                         Span::styled("elete", Style::default().fg(theme::OVERLAY)),
                         Span::styled(" ".repeat(padding), Style::default()),
+                        Span::styled(scroll_info, Style::default().fg(theme::OVERLAY)),
                         Span::styled("q", Style::default().fg(theme::PEACH).add_modifier(bold)),
                         Span::styled("uit ", Style::default().fg(theme::OVERLAY)),
                     ])
@@ -684,7 +710,29 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
             })
             .expect("failed to draw");
 
-        if let Event::Key(key) = event::read().expect("failed to read event") {
+        let ev = event::read().expect("failed to read event");
+
+        // Mouse scroll
+        if let Event::Mouse(mouse) = ev {
+            let visible = get_visible_indices(&items);
+            let vis_sel = state.selected().unwrap_or(0);
+            match mouse.kind {
+                MouseEventKind::ScrollDown => {
+                    if vis_sel + 1 < visible.len() {
+                        state.select(Some(vis_sel + 1));
+                    }
+                }
+                MouseEventKind::ScrollUp => {
+                    if vis_sel > 0 {
+                        state.select(Some(vis_sel - 1));
+                    }
+                }
+                _ => {}
+            }
+            continue;
+        }
+
+        if let Event::Key(key) = ev {
             if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
                 break;
             }
@@ -860,12 +908,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                 }
 
                 KeyCode::Char('l') | KeyCode::Right => {
-                    if real_idx < items.len() && items[real_idx].has_subtasks && items[real_idx].collapsed {
+                    if real_idx < items.len() && items[real_idx].collapsed {
                         items[real_idx].collapsed = false;
                     }
                 }
                 KeyCode::Char('h') | KeyCode::Left => {
-                    if real_idx < items.len() && items[real_idx].has_subtasks && !items[real_idx].collapsed {
+                    if real_idx < items.len() && !items[real_idx].collapsed && (items[real_idx].has_subtasks || items[real_idx].is_header) {
                         items[real_idx].collapsed = true;
                     }
                 }
