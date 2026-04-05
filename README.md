@@ -4,7 +4,7 @@
 ![Rust](https://img.shields.io/badge/rust-stable-dea584)
 ![Optional](https://img.shields.io/badge/optional-yazi%20·%20fzf%20·%20rg-blue)
 
-A local-first CLI note-taking tool. Notes live with your projects, mirrored to a home directory for a unified view.
+A local-first CLI note-taking tool. Notes live with your projects, mirrored to a home directory for a unified view. Comes with [**todoz**](#todoz) — a full interactive todo manager.
 
 ![notez tree — local project view](pictures/notez-local.png)
 
@@ -53,6 +53,20 @@ A friendly step-by-step wizard that configures your home notes folder, directory
   TODO.md                           ← global todos (-g)
 ```
 
+### Scope Flags
+
+| Flag | Scope | Directory |
+|---|---|---|
+| _(default)_ | Private | `.notez/` (gitignored) |
+| `-p` | Public | `notez/` (committed with project) |
+| `-g` | Global | `~/notez/` (all projects) |
+
+```bash
+notez add my idea                   # → .notez/  (private)
+notez add -p shared docs           # → notez/   (public)
+notez -g add personal thought      # → ~/notez/ (global)
+```
+
 ## Commands
 
 All commands default to private `.notez/`. Add `-p` for public `notez/`, or `-g` for global `~/notez/`.
@@ -76,12 +90,14 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | `notez log <message>` | Append a timestamped entry to today's log |
 | `notez logz` / `notez logs` | Browse daily logs |
 
-### Browse & Organize
+### Tree Browser
 
 | Command | Description |
 |---|---|
+| `notez tree` | Interactive tree with preview (private + public) |
+| `notez -p tree` | Public notes only |
+| `notez -g tree` | All projects (private + public, with scope icons) |
 | `notez` | Browse notes in yazi |
-| `notez tree` | Interactive tree navigator |
 | `notez search <term>` | Search note content (rg + fzf) |
 | `notez mkdir <name>` | Create a numbered subdirectory |
 
@@ -89,26 +105,39 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 | Key | Action |
 |---|---|
-| `j` / `k` | Navigate |
-| `l` / `→` | Expand directory |
-| `h` / `←` | Collapse / go to parent |
-| `o` / `Enter` | Open file in editor |
-| `q` / `Esc` / `Ctrl+C` / `:wq` | Quit |
+| `o` / `Enter` | Open file in editor / toggle directory |
+| `h` / `l` | Collapse / expand directory |
+| `t` | Tags — press `1`-`5` to toggle colored flags |
+| `f` | Focus directory (toggle — collapses all others) |
+| `/` | Search / filter (shown in title bar) |
+| `v` | Toggle view all / collapse all |
+| `J` / `K` | Scroll preview pane |
+| `j` / `k` / mouse scroll | Navigate (mouse also scrolls preview) |
+| `?` | Help overlay |
+| `q` / `Esc` / `Ctrl+C` / `:wq` | Quit (`Esc` clears search first) |
+
+**Preview pane:** Shows file content with markdown highlighting, or directory listing. Resolved file path shown at the bottom. Tags shown in the preview title.
+
+**Tags:** Same system as todoz — 5 colored dot flags, persisted in `.tags` files. Directory nodes aggregate tags from their children.
 
 ![notez tree — global view across all projects](pictures/notez-global.png)
 
-### Todos
+---
+
+## todoz
+
+A full interactive todo manager, installed as a standalone command alongside notez.
 
 | Command | Description |
 |---|---|
-| `todoz` | Interactive todo manager (private) |
-| `todoz -p` | Interactive todo manager (public) |
+| `todoz` | Interactive todo manager (private + public) |
+| `todoz -p` | Public todos only |
 | `todoz "item"` | Quick-add a private todo |
 | `todoz -g` | All todos across every project (private + public) |
 
 ![todoz — local project todos with subtasks](pictures/todoz-local.png)
 
-**Todo keybindings:**
+**Keybindings:**
 
 | Key | Action |
 |---|---|
@@ -140,32 +169,15 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 **Reorder:** `J`/`K` (shift) moves a todo up or down within its section and level.
 
-**Cursor navigation:** Arrow keys (←/→) move the cursor while editing or creating todos.
-
-**Local view:** `todoz` (no flags) shows both private and public todos side by side.
-
 **Code TODOs:** Automatically scans project source for `// TODO`, `# TODO`, `-- TODO`, `/* TODO`, `<!-- TODO` comments. Displayed as a read-only section with file path and line number — visible alongside your todos but non-interactive.
 
-**Global view (`todoz -g`):** Projects start collapsed — expand with `l`. Shows scroll position when the list exceeds the viewport. Aggregates private + public todos from all projects, each with a lock/globe indicator.
+**Global view (`todoz -g`):** Projects start collapsed — expand with `l`. Aggregates private + public todos from all projects, each with a lock/globe indicator.
 
 ![todoz -g — global view with all projects and subtasks](pictures/todoz-global.png)
 
-### Scope Flags
+---
 
-| Flag | Scope | Directory |
-|---|---|---|
-| _(default)_ | Private | `.notez/` (gitignored) |
-| `-p` | Public | `notez/` (committed with project) |
-| `-g` | Global | `~/notez/` (all projects) |
-
-```bash
-notez add my idea                   # → .notez/  (private)
-notez add -p shared docs           # → notez/   (public)
-notez -g add personal thought      # → ~/notez/ (global)
-todoz -g                           # all todos, private + public
-```
-
-### Standalone Commands
+## Standalone Commands
 
 Installed automatically as symlinks — no aliases needed:
 
@@ -185,7 +197,7 @@ alias zlog='noglob zlog'
 alias znote='noglob znote'
 ```
 
-### Setup & Config
+## Setup & Config
 
 | Command | Description |
 |---|---|

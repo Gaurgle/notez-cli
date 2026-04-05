@@ -20,13 +20,13 @@ enum CheckState {
 }
 
 // Flag bitfield constants
-const FLAG_IMPORTANT: u8 = 1 << 0;
-const FLAG_PRIO: u8     = 1 << 1;
-const FLAG_LONGTERM: u8  = 1 << 2;
-const FLAG_IDEA: u8      = 1 << 3;
-const FLAG_BLOCKED: u8   = 1 << 4;
+pub const FLAG_IMPORTANT: u8 = 1 << 0;
+pub const FLAG_PRIO: u8     = 1 << 1;
+pub const FLAG_LONGTERM: u8  = 1 << 2;
+pub const FLAG_IDEA: u8      = 1 << 3;
+pub const FLAG_BLOCKED: u8   = 1 << 4;
 
-const FLAG_COLORS: [Color; 5] = [
+pub const FLAG_COLORS: [Color; 5] = [
     Color::Rgb(243, 139, 168),  // red
     Color::Rgb(250, 179, 135),  // orange/peach
     Color::Rgb(249, 226, 175),  // yellow
@@ -34,9 +34,9 @@ const FLAG_COLORS: [Color; 5] = [
     Color::Rgb(203, 166, 247),  // purple
 ];
 
-const FLAG_SHAPES: [&str; 5] = ["●", "●", "●", "●", "●"];
+pub const FLAG_SHAPES: [&str; 5] = ["●", "●", "●", "●", "●"];
 
-const FLAG_DEFS: [(u8, &str, &str, &str); 5] = [
+pub const FLAG_DEFS: [(u8, &str, &str, &str); 5] = [
     (FLAG_IMPORTANT, "important", "●", "important"),
     (FLAG_PRIO,      "prio",     "●", "priority"),
     (FLAG_LONGTERM,  "longterm",  "●", "long-term"),
@@ -68,15 +68,16 @@ fn serialize_flags(flags: u8) -> String {
 }
 
 /// Render fixed-position flag slots (5 chars). Active flags show their shape, inactive show space.
-fn flags_slots(flags: u8) -> Vec<Span<'static>> {
+pub fn flags_slots(flags: u8) -> Vec<Span<'static>> {
     let bits = [FLAG_IMPORTANT, FLAG_PRIO, FLAG_LONGTERM, FLAG_IDEA, FLAG_BLOCKED];
-    let mut spans: Vec<Span<'static>> = bits.iter().enumerate().map(|(i, &bit)| {
+    let mut spans: Vec<Span<'static>> = vec![Span::raw(" ")];
+    for (i, &bit) in bits.iter().enumerate() {
         if flags & bit != 0 {
-            Span::styled(FLAG_SHAPES[i].to_string(), Style::default().fg(FLAG_COLORS[i]))
+            spans.push(Span::styled(FLAG_SHAPES[i].to_string(), Style::default().fg(FLAG_COLORS[i])));
         } else {
-            Span::raw(" ")
+            spans.push(Span::styled("·", Style::default().fg(Color::Rgb(50, 50, 65))));
         }
-    }).collect();
+    }
     spans.push(Span::raw(" "));
     spans
 }
@@ -579,15 +580,17 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
             );
         }
         None => {
-            let (items, tui_title) = if global {
-                (load_global_todos(&config), "todoz (global)".to_string())
+            let (items, tui_title, tui_path) = if global {
+                let path = config.notez_root.replacen(&dirs::home_dir().unwrap().to_string_lossy().to_string(), "~", 1);
+                (load_global_todos(&config), "todoz (global)".to_string(), path)
             } else {
                 let cwd = std::env::current_dir().unwrap_or_default();
                 let name = project::detect_project_name(&cwd);
                 let icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
-                (load_local_todos(&config, public), format!("{} todoz ({})", icon, name))
+                let dir_name = if public { "./notez" } else { "./.notez" };
+                (load_local_todos(&config, public), format!("{} todoz ({})", icon, name), dir_name.to_string())
             };
-            let updated = run_todo_tui(items, global, &tui_title);
+            let updated = run_todo_tui(items, global, &tui_title, &tui_path);
             if global {
                 save_all_todos(&updated);
             } else if public {
@@ -648,7 +651,7 @@ fn get_visible_indices(items: &[TodoItem]) -> Vec<usize> {
     visible
 }
 
-fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<TodoItem> {
+fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_path: &str) -> Vec<TodoItem> {
     let mut terminal = tui::enter().expect("failed to enter TUI");
     let mut state = ListState::default();
     if !items.is_empty() {
@@ -714,10 +717,21 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                             let mut header_spans = Vec::new();
                             header_spans.extend(flags_slots(item.flags));
                             header_spans.push(Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)));
-                            header_spans.push(Span::styled(
-                                format!("── {} ", item.text),
-                                Style::default().fg(header_color).add_modifier(ratatui::style::Modifier::BOLD),
-                            ));
+                            // Split scope icon from project name
+                            let header_text = &item.text;
+                            if let Some(rest) = header_text.strip_prefix(project::ICON_PRIVATE).or_else(|| header_text.strip_prefix(project::ICON_PUBLIC)) {
+                                let icon = &header_text[..header_text.len() - rest.len()];
+                                header_spans.push(Span::styled(format!("{} ", icon), Style::default().fg(theme::OVERLAY)));
+                                header_spans.push(Span::styled(
+                                    format!("{} ", rest.trim_start()),
+                                    Style::default().fg(header_color).add_modifier(ratatui::style::Modifier::BOLD),
+                                ));
+                            } else {
+                                header_spans.push(Span::styled(
+                                    format!("{} ", header_text),
+                                    Style::default().fg(header_color).add_modifier(ratatui::style::Modifier::BOLD),
+                                ));
+                            }
                             header_spans.push(Span::styled(path_display, Style::default().fg(theme::OVERLAY)));
                             ListItem::new(Line::from(header_spans))
                         } else if item.is_code_todo {
@@ -793,7 +807,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
                                     _ => Color::Rgb(56, 139, 176),
                                 },
                             };
-                            let prefix_len = indent.len() + collapse_icon.len() + 6 + checkbox.len();
+                            let prefix_len = indent.len() + collapse_icon.len() + 7 + checkbox.len();
                             let text_width = (area.width as usize).saturating_sub(prefix_len + 8);
 
                             if text_width > 0 && item.text.len() > text_width {
@@ -847,6 +861,8 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str) -> Vec<
 
                 let mut title_spans = vec![
                     Span::styled(format!(" {} ", tui_title), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
+                    Span::styled("— ", Style::default().fg(theme::SURFACE)),
+                    Span::styled(format!("{} ", tui_path), Style::default().fg(theme::OVERLAY)),
                     Span::styled("— ", Style::default().fg(theme::SURFACE)),
                     Span::styled(format!("{} pending", todo_count), Style::default().fg(theme::SAPPHIRE)),
                     Span::styled(" · ", Style::default().fg(theme::SURFACE)),
