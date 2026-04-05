@@ -3,7 +3,7 @@ use std::fs;
 use crate::colors::Colors;
 
 /// Create a mock notez directory structure for screenshots and demos.
-pub fn run_demo(view: Option<String>) {
+pub fn run_demo(_view: Option<String>) {
     let dir = dirs::home_dir().unwrap().join(".notez-demo");
 
     // Clean previous demo
@@ -11,16 +11,17 @@ pub fn run_demo(view: Option<String>) {
         fs::remove_dir_all(&dir).ok();
     }
 
-    // --- Project 1: my-project ---
-    let p1 = dir.join("my-project").join("notez");
-    let p1_quick = p1.join("00_quick-notes");
-    let p1_logs = p1.join("01_daily-logs");
-    let p1_research = p1.join("02_research");
-    let p1_api = p1.join("03_api-design");
+    // --- Project 1: my-project (private .notez + public notez) ---
+    let p1_private = dir.join("my-project").join(".notez");
+    let p1_public = dir.join("my-project").join("notez");
+    let p1_quick = p1_private.join("00_quick-notes");
+    let p1_logs = p1_private.join("01_daily-logs");
+    let p1_research = p1_private.join("02_research");
 
-    for d in [&p1_quick, &p1_logs, &p1_research, &p1_api] {
+    for d in [&p1_quick, &p1_logs, &p1_research] {
         fs::create_dir_all(d).unwrap();
     }
+    fs::create_dir_all(&p1_public.join("00_quick-notes")).unwrap();
 
     fs::write(p1_quick.join("2026-04-01-project-goals.md"),
         "# project-goals\n\nDate: 2026-04-01\n\nDefine the core features and MVP scope.\n").unwrap();
@@ -36,26 +37,24 @@ pub fn run_demo(view: Option<String>) {
 
     fs::write(p1_research.join("2026-04-01-database-comparison.md"),
         "# database-comparison\n\nDate: 2026-04-01\n\nPostgres vs SQLite for embedded use.\n").unwrap();
-    fs::write(p1_api.join("2026-04-02-endpoints.md"),
-        "# endpoints\n\nDate: 2026-04-02\n\nGET /items, POST /items, DELETE /items/:id\n").unwrap();
 
-    fs::write(p1.join("TODO.md"),
-        "# TODO\n\n\
-- [/] Set up CI/CD pipeline\n\
-  - [x] Configure build workflow\n\
-  - [x] Add test runner\n\
-  - [ ] Deploy to production\n\
-- [ ] Write API documentation\n\
-  - [ ] Document endpoints\n\
-  - [ ] Add example requests\n\
-- [x] Initial project setup\n\
-- [/] User authentication\n\
-  - [x] Login flow\n\
-  - [x] Token refresh\n\
-  - [ ] Password reset\n").unwrap();
+    // Private TODO with tags and nested subtasks
+    fs::write(p1_private.join("TODO.md"),
+        "# TODO\n\n- [/] Set up CI/CD pipeline #important #prio\n  - [x] Configure build workflow\n  - [x] Add test runner\n  - [ ] Deploy to production #blocked\n    - [ ] Set up staging env\n    - [ ] Write deploy script\n- [ ] Write API documentation #longterm\n  - [ ] Document endpoints\n    - [ ] GET /items\n    - [ ] POST /items\n  - [ ] Add example requests\n- [x] Initial project setup\n- [/] User authentication #prio\n  - [x] Login flow\n  - [x] Token refresh\n  - [ ] Password reset #idea\n").unwrap();
 
-    // --- Project 2: webapp ---
-    let p2 = dir.join("webapp").join("notez");
+    // Public TODO with subtasks
+    fs::write(p1_public.join("TODO.md"),
+        "# TODO\n\n- [ ] Update contributing guide\n  - [ ] Code of conduct\n  - [ ] PR template\n- [x] Add license file\n- [ ] Improve README #prio\n  - [/] Add install instructions\n  - [ ] Add usage examples\n").unwrap();
+
+    fs::write(p1_public.join("00_quick-notes").join("2026-04-03-onboarding.md"),
+        "# onboarding\n\nDate: 2026-04-03\n\nSteps for new contributors.\n").unwrap();
+
+    // Tags for tree
+    fs::write(p1_private.join(".tags"),
+        "02_research:4\n").unwrap(); // idea flag on research dir
+
+    // --- Project 2: webapp (private only) ---
+    let p2 = dir.join("webapp").join(".notez");
     let p2_quick = p2.join("00_quick-notes");
     fs::create_dir_all(&p2_quick).unwrap();
 
@@ -63,15 +62,7 @@ pub fn run_demo(view: Option<String>) {
         "# design-system\n\nDate: 2026-04-02\n\nComponent library with Tailwind.\n").unwrap();
 
     fs::write(p2.join("TODO.md"),
-        "# TODO\n\n\
-- [ ] Design system components\n\
-  - [x] Button variants\n\
-  - [ ] Form inputs\n\
-  - [ ] Modal dialogs\n\
-- [/] Landing page\n\
-  - [x] Hero section\n\
-  - [ ] Pricing table\n\
-- [ ] Dark mode support\n").unwrap();
+        "# TODO\n\n- [ ] Design system components #idea\n  - [x] Button variants\n  - [ ] Form inputs\n  - [ ] Modal dialogs\n- [/] Landing page #prio\n  - [x] Hero section\n  - [ ] Pricing table\n- [ ] Dark mode support #longterm\n").unwrap();
 
     // --- Global notez home (simulated) ---
     let home = dir.join("notez-home");
@@ -80,10 +71,10 @@ pub fn run_demo(view: Option<String>) {
     fs::create_dir_all(&home_quick).unwrap();
     fs::create_dir_all(&home_logs).unwrap();
 
-    // Symlink projects into home
+    // Symlink private project dirs into home
     let home_p1 = home.join("02_my-project");
     let home_p2 = home.join("03_webapp");
-    std::os::unix::fs::symlink(&p1, &home_p1).ok();
+    std::os::unix::fs::symlink(&p1_private, &home_p1).ok();
     std::os::unix::fs::symlink(&p2, &home_p2).ok();
 
     fs::write(home_quick.join("2026-04-01-personal-ideas.md"),
@@ -93,13 +84,9 @@ pub fn run_demo(view: Option<String>) {
         "# Daily Log - 2026-04-03\n\n08:00 - Morning review\n12:00 - Lunch walk\n").unwrap();
 
     fs::write(home.join("TODO.md"),
-        "# TODO\n\n\
-- [ ] Review quarterly goals\n\
-- [x] Update dotfiles\n\
-- [ ] Read Rust book chapter 12\n").unwrap();
+        "# TODO\n\n- [ ] Review quarterly goals #important\n- [x] Update dotfiles\n- [ ] Read Rust book chapter 12 #longterm\n").unwrap();
 
     // Write a temporary config pointing to the demo home
-    // XDG_CONFIG_HOME looks for $XDG_CONFIG_HOME/notez/config
     let demo_config_dir = dir.join("notez");
     fs::create_dir_all(&demo_config_dir).unwrap();
     let demo_config = demo_config_dir.join("config");
@@ -109,8 +96,17 @@ pub fn run_demo(view: Option<String>) {
     );
     fs::write(&demo_config, config_content).unwrap();
 
+    // Project mapping for global view to find public notes
+    let projects_file = demo_config_dir.join("projects");
+    fs::write(&projects_file, format!(
+        "my-project={}\nwebapp={}\n",
+        dir.join("my-project").to_string_lossy(),
+        dir.join("webapp").to_string_lossy(),
+    )).unwrap();
+
     let colors = Colors::new();
     let cd_p1 = format!("cd {}", dir.join("my-project").to_string_lossy());
+    let xdg = format!("XDG_CONFIG_HOME={}", dir.to_string_lossy());
 
     println!();
     println!(
@@ -118,37 +114,24 @@ pub fn run_demo(view: Option<String>) {
         colors.green.apply_to("✓")
     );
     println!();
-    println!("  {}", colors.mauve.apply_to("Project view"));
+    println!("  {}", colors.mauve.apply_to("Local view (project)"));
     println!(
         "    {}",
         colors.overlay.apply_to(format!("{} && notez tree", cd_p1))
     );
     println!(
         "    {}",
-        colors.overlay.apply_to(format!("{} && notez todo", cd_p1))
+        colors.overlay.apply_to(format!("{} && todoz", cd_p1))
     );
     println!();
     println!("  {}", colors.mauve.apply_to("Global view (all projects)"));
     println!(
         "    {}",
-        colors.overlay.apply_to(format!(
-            "XDG_CONFIG_HOME={} notez -g tree",
-            dir.to_string_lossy()
-        ))
+        colors.overlay.apply_to(format!("{} {} notez -g tree", cd_p1, xdg))
     );
     println!(
         "    {}",
-        colors.overlay.apply_to(format!(
-            "XDG_CONFIG_HOME={} notez -g todo",
-            dir.to_string_lossy()
-        ))
-    );
-    println!(
-        "    {}",
-        colors.overlay.apply_to(format!(
-            "XDG_CONFIG_HOME={} todoz -g",
-            dir.to_string_lossy()
-        ))
+        colors.overlay.apply_to(format!("{} {} todoz -g", cd_p1, xdg))
     );
     println!();
     println!("  {}", colors.mauve.apply_to("Help"));
