@@ -1,8 +1,14 @@
 # notez
 
 ![License](https://img.shields.io/github/license/Gaurgle/notez-cli)
+![Open Source](https://img.shields.io/badge/open%20source-%E2%9D%A4-c4a7e7)
 ![Rust](https://img.shields.io/badge/rust-stable-dea584)
-![Optional](https://img.shields.io/badge/optional-yazi%20·%20fzf%20·%20rg-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20·%20Linux-lightgrey)
+
+![Notes](https://img.shields.io/badge/notes-private%20·%20public%20·%20global-89b4fa)
+![Todos](https://img.shields.io/badge/todoz-tags%20·%20subtasks%20·%20search%20·%20focus-a6e3a1)
+![Tree](https://img.shields.io/badge/tree-preview%20·%20tags%20·%20search%20·%20focus-cba6f7)
+![Optional](https://img.shields.io/badge/optional-yazi%20·%20fzf%20·%20rg-7f849c)
 
 A local-first CLI note-taking tool. Notes live with your projects, mirrored to a home directory for a unified view. Comes with [**todoz**](#todoz) — a full interactive todo manager.
 
