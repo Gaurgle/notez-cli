@@ -259,7 +259,7 @@ fn main() {
             Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
             Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
             Some(Commands::Zlogs) => commands::browse::run_logz(cli.global, cli.public),
-            Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
+            Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
             Some(Commands::Znote { title, r#in }) => {
                 let (t, body) = split_title_body(title);
                 commands::add::run_add(cli.global, cli.public, t, r#in, body)

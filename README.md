@@ -113,24 +113,34 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | Key | Action |
 |---|---|
 | `x` / `space` / `Enter` | Check/uncheck (on parent: toggles all subtasks) |
-| `a` / `/` | Almost done `[/]` |
+| `a` | Almost done `[/]` |
 | `n` | New todo |
-| `s` | Add subtask |
+| `s` | Add subtask (two levels deep) |
 | `e` | Edit text (←/→ to move cursor) |
 | `d` | Delete (y/n confirm) |
+| `t` | Tags — press `1`-`5` to toggle colored flags |
+| `f` | Focus section (toggle — collapses all others) |
+| `/` | Search / filter todos (shown in title bar) |
 | `J` / `K` | Move todo down / up (reorder) |
 | `h` / `l` | Collapse / expand (subtasks + project sections) |
 | `v` | Toggle view all / collapse all |
 | `j` / `k` / mouse scroll | Navigate |
-| `q` / `Esc` / `Ctrl+C` / `:wq` | Quit |
+| `?` | Help overlay |
+| `q` / `Esc` / `Ctrl+C` / `:wq` | Quit (`Esc` clears search first) |
 
 **Todo states:** `[ ]` unchecked → `[/]` almost done → `[x]` checked
 
 **Subtasks:** Two levels deep — press `s` on any todo or subtask to nest under it. Parent state auto-derived from child completion.
 
+**Tags:** 5 colored flags (●) shown to the left of each todo: important (red), priority (orange), long-term (yellow), idea (blue), blocked (purple). Press `t` then `1`-`5` to toggle. Tags stack and are persisted as `#important #prio #longterm #idea #blocked` in the markdown. Section headers aggregate tags from their children.
+
+**Focus mode:** Press `f` to focus the current section — all others collapse. Navigate between sections and focus auto-follows. Press `f` again to restore the previous view.
+
+**Search:** Press `/` to filter todos from the title bar. `Enter` keeps the filter active, `Esc` clears it. Filters both todos and section headers.
+
 **Reorder:** `J`/`K` (shift) moves a todo up or down within its section and level.
 
-**Cursor navigation:** Arrow keys (←/→) move the cursor while editing or creating todos — no more backspace-only editing.
+**Cursor navigation:** Arrow keys (←/→) move the cursor while editing or creating todos.
 
 **Local view:** `todoz` (no flags) shows both private and public todos side by side.
 
