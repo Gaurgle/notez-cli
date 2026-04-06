@@ -183,7 +183,7 @@ fn load_single_todo(path: &Path, project_name: &str) -> Vec<TodoItem> {
 /// Recalculate parent check states based on their direct children.
 fn derive_parent_states(items: &mut Vec<TodoItem>) {
     let len = items.len();
-    for i in 0..len {
+    for i in (0..len).rev() {
         if items[i].is_header || !items[i].has_subtasks {
             continue;
         }
@@ -299,7 +299,20 @@ fn scan_code_todos() -> Vec<TodoItem> {
             .trim_start_matches(':')
             .trim();
 
-        let display = format!("{}:{} {}", file, line_num, todo_text);
+        let short_file = std::path::Path::new(file)
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| file.to_string());
+        let truncated = if todo_text.len() > 60 {
+            format!("{}…", &todo_text[..60].trim_end())
+        } else {
+            todo_text.to_string()
+        };
+        let display = if truncated.is_empty() {
+            format!("{}:{}", short_file, line_num)
+        } else {
+            format!("{}:{} {}", short_file, line_num, truncated)
+        };
 
         results.push(TodoItem {
             text: display,
@@ -513,7 +526,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
 fn save_all_todos(items: &[TodoItem]) {
     let mut sources: Vec<PathBuf> = Vec::new();
     for item in items {
-        if !item.is_header && !sources.contains(&item.source) {
+        if !item.is_code_todo && !sources.contains(&item.source) {
             sources.push(item.source.clone());
         }
     }
@@ -735,79 +748,50 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             header_spans.push(Span::styled(path_display, Style::default().fg(theme::OVERLAY)));
                             ListItem::new(Line::from(header_spans))
                         } else if item.is_code_todo {
-                            // Code TODOs: read-only, prefixed with -, continuation indented
-                            let prefix = "    - ";
-                            let cont_indent = "        ";
-                            let text_width = (area.width as usize).saturating_sub(prefix.len() + 8);
-                            if text_width > 0 && item.text.len() > text_width {
-                                let mut lines = vec![];
-                                let mut remaining = item.text.as_str();
-                                let mut first = true;
-                                while !remaining.is_empty() {
-                                    let w = if first { text_width } else { (area.width as usize).saturating_sub(cont_indent.len() + 8) };
-                                    let split_at = remaining.len().min(w).max(1);
-                                    let split_at = if split_at < remaining.len() {
-                                        remaining[..split_at].rfind(' ').unwrap_or(split_at)
-                                    } else {
-                                        split_at
-                                    };
-                                    let (chunk, rest) = remaining.split_at(split_at);
-                                    let rest = rest.trim_start();
-                                    if first {
-                                        lines.push(Line::from(vec![
-                                            Span::styled(prefix, Style::default().fg(theme::SURFACE)),
-                                            Span::styled(chunk.to_string(), Style::default().fg(theme::OVERLAY)),
-                                        ]));
-                                        first = false;
-                                    } else {
-                                        lines.push(Line::from(vec![
-                                            Span::styled(cont_indent, Style::default()),
-                                            Span::styled(chunk.to_string(), Style::default().fg(theme::OVERLAY)),
-                                        ]));
-                                    }
-                                    remaining = rest;
-                                }
-                                ListItem::new(lines)
-                            } else {
-                                ListItem::new(Line::from(vec![
-                                    Span::styled(prefix, Style::default().fg(theme::SURFACE)),
-                                    Span::styled(item.text.clone(), Style::default().fg(theme::OVERLAY)),
-                                ]))
-                            }
+                            let mut spans = Vec::new();
+                            spans.extend(flags_slots(0));
+                            spans.push(Span::styled("   ", Style::default()));
+                            spans.push(Span::styled(item.text.clone(), Style::default().fg(theme::OVERLAY)));
+                            ListItem::new(Line::from(spans))
                         } else {
                             let (indent, collapse_icon) = if item.has_subtasks {
-                                let pad = "  ".repeat(item.depth as usize);
+                                let pad = format!(" {}", "  ".repeat(item.depth as usize));
                                 let icon = if item.collapsed { "▶ " } else { "▼ " };
                                 (pad, icon)
                             } else {
-                                let pad = "  ".repeat(item.depth as usize + 1);
+                                let pad = format!(" {}", "  ".repeat(item.depth as usize + 1));
                                 (pad, "")
                             };
-                            let (checkbox, style) = match item.state {
+                            let (mark, mark_color, bracket_color, style) = match item.state {
                                 CheckState::Checked => (
-                                    "[x] ",
+                                    "x",
+                                    theme::SAPPHIRE,
+                                    theme::OVERLAY,
                                     Style::default().fg(theme::OVERLAY),
                                 ),
                                 CheckState::Half => (
-                                    "[/] ",
+                                    "/",
+                                    theme::YELLOW,
+                                    theme::OVERLAY,
                                     Style::default().fg(theme::SUBTEXT),
                                 ),
                                 CheckState::Unchecked => (
-                                    "[ ] ",
+                                    " ",
+                                    theme::SURFACE,
+                                    match item.depth {
+                                        0 => theme::SAPPHIRE,
+                                        1 => Color::Rgb(86, 169, 206),
+                                        _ => Color::Rgb(56, 139, 176),
+                                    },
                                     Style::default().fg(theme::TEXT),
                                 ),
                             };
-                            // Subtly dim checkbox brackets per depth
-                            let checkbox_color = match item.state {
-                                CheckState::Checked => theme::SURFACE,
-                                CheckState::Half => theme::LAVENDER,
-                                CheckState::Unchecked => match item.depth {
-                                    0 => theme::SAPPHIRE,                  // Rgb(116, 199, 236)
-                                    1 => Color::Rgb(86, 169, 206),
-                                    _ => Color::Rgb(56, 139, 176),
-                                },
-                            };
-                            let prefix_len = indent.len() + collapse_icon.len() + 7 + checkbox.len();
+                            let checkbox_spans = vec![
+                                Span::styled("[", Style::default().fg(bracket_color)),
+                                Span::styled(mark, Style::default().fg(mark_color)),
+                                Span::styled("] ", Style::default().fg(bracket_color)),
+                            ];
+                            let prefix_len = indent.len() + collapse_icon.len() + 7 + 4; // 4 = "[x] " width
                             let text_width = (area.width as usize).saturating_sub(prefix_len + 8);
 
                             if text_width > 0 && item.text.len() > text_width {
@@ -829,7 +813,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                                         spans.extend(flags_slots(item.flags));
                                         spans.push(Span::styled(indent.clone(), Style::default()));
                                         spans.push(Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)));
-                                        spans.push(Span::styled(checkbox, Style::default().fg(checkbox_color)));
+                                        spans.extend(checkbox_spans.clone());
                                         spans.push(Span::styled(chunk.to_string(), style));
                                         lines.push(Line::from(spans));
                                         first = false;
@@ -848,7 +832,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                                 spans.extend(flags_slots(item.flags));
                                 spans.push(Span::styled(indent, Style::default()));
                                 spans.push(Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)));
-                                spans.push(Span::styled(checkbox, Style::default().fg(checkbox_color)));
+                                spans.extend(checkbox_spans);
                                 spans.push(Span::styled(item.text.clone(), style));
                                 ListItem::new(Line::from(spans))
                             }
@@ -916,25 +900,29 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                     let ri = vis.get(vs).copied().unwrap_or(0);
                     let cur_flags = if ri < items.len() { items[ri].flags } else { 0 };
                     let mut spans = vec![
-                        Span::styled(" tags: ", Style::default().fg(theme::MAUVE)),
+                        Span::styled(" tags: ", Style::default().fg(Color::Rgb(205, 152, 115))),
                     ];
                     for (idx, &(bit, _, _, label)) in FLAG_DEFS.iter().enumerate() {
-                        let num = format!("{}:", idx + 1);
                         let active = cur_flags & bit != 0;
                         let color = FLAG_COLORS[idx];
-                        let dim = theme::SURFACE;
-                        spans.push(Span::styled(num, Style::default().fg(if active { theme::TEXT } else { theme::OVERLAY })));
-                        spans.push(Span::styled(format!("{}", FLAG_SHAPES[idx]), Style::default().fg(if active { color } else { dim })));
-                        spans.push(Span::styled(format!("{}  ", label), Style::default().fg(if active { color } else { theme::OVERLAY })));
+                        spans.push(Span::styled(format!("{}", idx + 1), Style::default().fg(color)));
+                        spans.push(Span::styled(format!(":{} ", label), Style::default().fg(if active { color } else { theme::OVERLAY })));
+                        spans.push(Span::styled(" ", Style::default()));
                     }
                     Line::from(spans)
                 } else if input_mode || subtask_mode || edit_mode {
-                    let label = if edit_mode { " edit: " } else if subtask_mode { " subtask: " } else { " new: " };
+                    let (label, label_color) = if edit_mode {
+                        (" edit: ", Color::Rgb(165, 133, 202))
+                    } else if subtask_mode {
+                        (" subtask: ", Color::Rgb(148, 157, 210))
+                    } else {
+                        (" new: ", Color::Rgb(136, 190, 132))
+                    };
                     let (before, after) = input_buffer.split_at(cursor_pos.min(input_buffer.len()));
                     let cursor_char = after.chars().next().map(|c| c.to_string()).unwrap_or_else(|| " ".to_string());
                     let rest = if after.len() > cursor_char.len() { &after[cursor_char.len()..] } else { "" };
                     Line::from(vec![
-                        Span::styled(label, Style::default().fg(theme::MAUVE)),
+                        Span::styled(label, Style::default().fg(label_color)),
                         Span::styled(before.to_string(), Style::default().fg(theme::TEXT)),
                         Span::styled(cursor_char, Style::default().fg(theme::BASE).bg(theme::SAPPHIRE)),
                         Span::styled(rest.to_string(), Style::default().fg(theme::TEXT)),
@@ -955,7 +943,10 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         String::new()
                     };
 
-                    let left = " xheck  almost  new  subtask  edit  tags  focus  delete  view all";
+                    let all_expanded = !items.iter().any(|i| (i.is_header || i.has_subtasks) && i.collapsed);
+                    let focus_color = if focus_active { Color::Rgb(136, 190, 132) } else { theme::OVERLAY };
+                    let view_color = if all_expanded { Color::Rgb(96, 165, 196) } else { theme::OVERLAY };
+                    let left = " xheck  almost  new  subtask  edit  tags  focus  view all  delete";
                     let right_len = 4 + scroll_info.len();
                     let padding = width.saturating_sub(left.len() + right_len);
                     Line::from(vec![
@@ -973,11 +964,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         Span::styled("t", Style::default().fg(theme::PEACH).add_modifier(bold)),
                         Span::styled("ags  ", Style::default().fg(theme::OVERLAY)),
                         Span::styled("f", Style::default().fg(theme::GREEN).add_modifier(bold)),
-                        Span::styled("ocus  ", Style::default().fg(theme::OVERLAY)),
-                        Span::styled("d", Style::default().fg(theme::RED).add_modifier(bold)),
-                        Span::styled("elete  ", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("ocus  ", Style::default().fg(focus_color)),
                         Span::styled("v", Style::default().fg(theme::SAPPHIRE).add_modifier(bold)),
-                        Span::styled("iew all", Style::default().fg(theme::OVERLAY)),
+                        Span::styled("iew all  ", Style::default().fg(view_color)),
+                        Span::styled("d", Style::default().fg(theme::RED).add_modifier(bold)),
+                        Span::styled("elete", Style::default().fg(theme::OVERLAY)),
                         Span::styled(" ".repeat(padding), Style::default()),
                         Span::styled(scroll_info, Style::default().fg(theme::OVERLAY)),
                         Span::styled("q", Style::default().fg(theme::PEACH).add_modifier(bold)),

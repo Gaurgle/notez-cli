@@ -88,7 +88,10 @@ enum Commands {
         term: Option<String>,
     },
     /// Interactive todo manager (alias for todo)
-    Todoz,
+    Todoz {
+        /// Quick-add a todo item
+        item: Option<String>,
+    },
     /// Quick new note (alias for add)
     Znote {
         /// Note title (defaults to "untitled")
@@ -255,7 +258,7 @@ fn main() {
         }
 
         match cli.command {
-            Some(Commands::Todoz) => commands::todo::run_todo(cli.global, cli.public, None),
+            Some(Commands::Todoz { item }) => commands::todo::run_todo(cli.global, cli.public, item),
             Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
             Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
             Some(Commands::Zlogs) => commands::browse::run_logz(cli.global, cli.public),
@@ -295,7 +298,7 @@ fn main() {
         Some(Commands::Zlogs) => commands::browse::run_logz(cli.global, cli.public),
         Some(Commands::Completions { shell }) => commands::completions::run_completions(shell),
         Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
-        Some(Commands::Todoz) => commands::todo::run_todo(cli.global, cli.public, None),
+        Some(Commands::Todoz { item }) => commands::todo::run_todo(cli.global, cli.public, item),
         Some(Commands::Edit { term }) => commands::edit::run_edit(cli.global, cli.public, term),
         Some(Commands::Znote { title, r#in }) => {
             let (t, body) = split_title_body(title);
