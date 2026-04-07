@@ -435,6 +435,9 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
 fn load_global_todos(config: &Config) -> Vec<TodoItem> {
     let root = config.root_path();
     let mut all_items = Vec::new();
+    // Track canonical paths to avoid loading the same physical file twice
+    // (e.g. when a numbered dir symlinks to a project that also has a mirrored entry)
+    let mut seen_canonical: Vec<PathBuf> = Vec::new();
 
     // Scan home notez dir (private, symlinked)
     let Ok(entries) = fs::read_dir(&root) else {
@@ -452,6 +455,11 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         if !todo_path.exists() {
             continue;
         }
+        let canonical = todo_path.canonicalize().unwrap_or_else(|_| todo_path.clone());
+        if seen_canonical.contains(&canonical) {
+            continue;
+        }
+        seen_canonical.push(canonical);
         let dir_name = entry.file_name().to_string_lossy().to_string();
         let items = load_single_todo(&todo_path, &dir_name);
         if items.is_empty() {
@@ -480,6 +488,11 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         if !public_todo.exists() {
             continue;
         }
+        let canonical = public_todo.canonicalize().unwrap_or_else(|_| public_todo.clone());
+        if seen_canonical.contains(&canonical) {
+            continue;
+        }
+        seen_canonical.push(canonical);
         let items = load_single_todo(&public_todo, name);
         if items.is_empty() {
             continue;
@@ -525,8 +538,15 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
 
 fn save_all_todos(items: &[TodoItem]) {
     let mut sources: Vec<PathBuf> = Vec::new();
+    let mut seen_canonical: Vec<PathBuf> = Vec::new();
     for item in items {
         if !item.is_code_todo && !sources.contains(&item.source) {
+            // Skip if another source path already resolves to the same physical file
+            let canonical = item.source.canonicalize().unwrap_or_else(|_| item.source.clone());
+            if seen_canonical.contains(&canonical) {
+                continue;
+            }
+            seen_canonical.push(canonical);
             sources.push(item.source.clone());
         }
     }
