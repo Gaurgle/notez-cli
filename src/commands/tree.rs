@@ -65,11 +65,12 @@ pub fn run_tree(global: bool, public: bool) {
             let rel = node.path.strip_prefix(&root).unwrap_or(&node.path).to_string_lossy().to_string();
             if let Some(&flags) = tags.get(&rel) { node.flags = flags; }
         }
-        // Detect private/public for symlinked project dirs
+        // All depth-0 dirs in the global tree live under notez_root, which IS the
+        // private store (since the layout inversion of 2026-04-15). Mark them private;
+        // the second loop below adds public entries from project mappings as siblings.
         for node in nodes.iter_mut() {
             if node.is_dir && node.depth == 0 {
-                let resolved = fs::canonicalize(&node.path).unwrap_or(node.path.clone()).to_string_lossy().to_string();
-                node.scope_icon = if resolved.contains("/.notez") { project::ICON_PRIVATE } else { project::ICON_PUBLIC };
+                node.scope_icon = project::ICON_PRIVATE;
             }
         }
 
