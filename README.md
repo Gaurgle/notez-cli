@@ -185,23 +185,32 @@ A full interactive todo manager, installed as a standalone command alongside not
 
 ## Standalone Commands
 
-Installed automatically as symlinks — no aliases needed:
+Installed automatically as symlinks — no aliases needed.
 
-| Command | Same as |
-|---|---|
-| `todoz` | `notez todo` |
-| `todoz -g` | `notez -g todo` |
-| `zlog <message>` | `notez log` |
-| `zlogs` | `notez logz` |
-| `logz` | `notez logz` |
-| `znote [title]` | `notez add` |
+**Naming convention:** `z<verb>` for write/append commands (act on data), `<noun>z` for view/manage TUIs (open something). The brand `notez` is itself the noun-z form.
 
-**Zsh users:** if you use `?` or `*` in messages, add these to `.zshrc` to prevent glob expansion:
+| Command | Same as | What it does |
+|---|---|---|
+| `znote [title]` | `notez add` | Create a note (write) |
+| `zlog <message>` | `notez log` | Append daily log entry (write) |
+| `editz [term]` | `notez edit` | Open existing note (edit) |
+| `todoz` | `notez todo` | Todo manager TUI |
+| `treez` | `notez tree` | Notes tree browser TUI |
+| `logz` | `notez logz` | Daily logs browser TUI |
+| `findz <term>` | `notez search` | Search notes content |
+
+All accept the global flags `-g` (target `~/notez/`) and `-p` (target project's public `notez/`).
+
+### Shell integration
+
+`notez init <shell>` prints shell-side helpers (most importantly `noglob` wrappers around write commands so messages with `?` and `*` don't need quoting). Add this single line to your shell rc instead of maintaining aliases by hand:
 
 ```bash
-alias zlog='noglob zlog'
-alias znote='noglob znote'
+# .zshrc
+eval "$(notez init zsh)"
 ```
+
+Currently supports `zsh`. `bash` and `fish` are accepted but emit no helpers (they don't have zsh's glob behavior on command args).
 
 ## Setup & Config
 
