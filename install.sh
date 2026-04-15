@@ -31,14 +31,24 @@ mkdir -p "$INSTALL_DIR"
 cp target/release/notez "$INSTALL_DIR/notez"
 chmod +x "$INSTALL_DIR/notez"
 
-# Create symlinks for standalone commands
-for cmd in todoz zlog zlogs logz znote; do
+# Re-sign on macOS — `cp` over an existing Mach-O invalidates the ad-hoc
+# linker signature, which causes the kernel to SIGKILL the new binary on
+# launch. Re-applying an ad-hoc signature is harmless on Linux (no-op).
+if command -v codesign &>/dev/null; then
+    codesign --force --sign - "$INSTALL_DIR/notez" 2>/dev/null || true
+fi
+
+# Create symlinks for standalone commands.
+# Naming convention:
+#   z<verb>  for write/append commands  (zlog, znote, editz)
+#   <noun>z  for view/manage TUIs       (todoz, logz, treez, findz)
+for cmd in todoz zlog logz znote treez editz findz; do
     ln -sf "$INSTALL_DIR/notez" "$INSTALL_DIR/$cmd"
 done
 
 echo ""
 echo "  ${GREEN}✓${RESET} installed to $INSTALL_DIR/notez"
-echo "  ${GREEN}✓${RESET} standalone commands: todoz, zlog, zlogs, logz, znote"
+echo "  ${GREEN}✓${RESET} standalone commands: todoz, zlog, logz, znote, treez, editz, findz"
 
 # Check PATH
 if ! echo "$PATH" | tr ':' '\n' | grep -q "^$INSTALL_DIR$"; then

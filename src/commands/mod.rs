@@ -3,6 +3,7 @@ pub mod browse;
 pub mod completions;
 pub mod demo;
 pub mod edit;
+pub mod init;
 pub mod log;
 pub mod mkdir;
 pub mod search;

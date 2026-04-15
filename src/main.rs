@@ -70,11 +70,26 @@ enum Commands {
         /// Log message
         message: Vec<String>,
     },
-    /// Open daily logs directory (alias for logz)
-    Zlogs,
+    /// Show directory tree (alias for tree)
+    Treez,
+    /// Open an existing note (alias for edit)
+    Editz {
+        /// Search term to fuzzy-match note filename
+        term: Option<String>,
+    },
+    /// Search notes content (alias for search)
+    Findz {
+        /// Search term
+        term: String,
+    },
     /// Generate shell completions
     Completions {
         /// Shell to generate for (zsh, bash, fish)
+        shell: String,
+    },
+    /// Print shell integration (`eval "$(notez init zsh)"` from .zshrc)
+    Init {
+        /// Shell to generate integration for (zsh, bash, fish)
         shell: String,
     },
     /// Manage project todos
@@ -261,12 +276,14 @@ fn main() {
             Some(Commands::Todoz { item }) => commands::todo::run_todo(cli.global, cli.public, item),
             Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
             Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
-            Some(Commands::Zlogs) => commands::browse::run_logz(cli.global, cli.public),
             Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
             Some(Commands::Znote { title, r#in }) => {
                 let (t, body) = split_title_body(title);
                 commands::add::run_add(cli.global, cli.public, t, r#in, body)
             }
+            Some(Commands::Treez) | Some(Commands::Tree) => commands::tree::run_tree(cli.global, cli.public),
+            Some(Commands::Editz { term }) | Some(Commands::Edit { term }) => commands::edit::run_edit(cli.global, cli.public, term),
+            Some(Commands::Findz { term }) | Some(Commands::Search { term }) => commands::search::run_search(cli.global, cli.public, term),
             _ => {
                 print_help();
             }
@@ -295,8 +312,11 @@ fn main() {
         Some(Commands::Setup) => setup::run_setup(),
         Some(Commands::Demo { view }) => commands::demo::run_demo(view),
         Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
-        Some(Commands::Zlogs) => commands::browse::run_logz(cli.global, cli.public),
+        Some(Commands::Treez) => commands::tree::run_tree(cli.global, cli.public),
+        Some(Commands::Editz { term }) => commands::edit::run_edit(cli.global, cli.public, term),
+        Some(Commands::Findz { term }) => commands::search::run_search(cli.global, cli.public, term),
         Some(Commands::Completions { shell }) => commands::completions::run_completions(shell),
+        Some(Commands::Init { shell }) => commands::init::run_init(shell),
         Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
         Some(Commands::Todoz { item }) => commands::todo::run_todo(cli.global, cli.public, item),
         Some(Commands::Edit { term }) => commands::edit::run_edit(cli.global, cli.public, term),
