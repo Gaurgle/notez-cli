@@ -481,6 +481,51 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         all_items.extend(items);
     }
 
+    // Scan _todos/<category>/TODO.md — a sub-namespace under ~/notez/ for global
+    // todo categories that don't share the top-level numbering with notes/projects
+    // (e.g. ~/notez/_todos/work/TODO.md, ~/notez/_todos/general/TODO.md).
+    // These are kept in a separate vec so we can insert them right after "global"
+    // in the final result (rather than after project mirrors).
+    let mut todo_categories: Vec<TodoItem> = Vec::new();
+    let todos_root = root.join("_todos");
+    if let Ok(todo_entries) = fs::read_dir(&todos_root) {
+        let mut todo_dirs: Vec<_> = todo_entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .collect();
+        todo_dirs.sort_by_key(|e| e.file_name());
+        for entry in todo_dirs {
+            let todo_path = entry.path().join("TODO.md");
+            if !todo_path.exists() {
+                continue;
+            }
+            let canonical = todo_path.canonicalize().unwrap_or_else(|_| todo_path.clone());
+            if seen_canonical.contains(&canonical) {
+                continue;
+            }
+            seen_canonical.push(canonical);
+            let cat_name = entry.file_name().to_string_lossy().to_string();
+            let items = load_single_todo(&todo_path, &cat_name);
+            // Note: do NOT skip when items.is_empty(); we always show category
+            // headers so the user sees the category exists and can add to it.
+            todo_categories.push(TodoItem {
+                // Uppercase display visually distinguishes the three top "general"
+                // categories (GLOBAL, GENERAL, WORK) from project mirrors below.
+                text: format!("{} {}", project::ICON_PRIVATE, cat_name.to_uppercase()),
+                state: CheckState::Unchecked,
+                source: todo_path.clone(),
+                project: cat_name,
+                is_header: true,
+                depth: 0,
+                has_subtasks: false,
+                collapsed: true,
+                is_code_todo: false,
+                flags: 0,
+            });
+            todo_categories.extend(items);
+        }
+    }
+
     // Also scan project paths for public notez/TODO.md
     let mapping = project::ProjectMapping::load();
     for (name, path) in &mapping.projects {
@@ -517,7 +562,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
     let root_todo = root.join("TODO.md");
     let global_items = load_single_todo(&root_todo, "global");
     let mut result = vec![TodoItem {
-        text: format!("{} global", project::ICON_PRIVATE),
+        text: format!("{} GLOBAL", project::ICON_PRIVATE),
         state: CheckState::Unchecked,
         source: root_todo,
         project: "global".to_string(),
@@ -529,6 +574,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         flags: 0,
     }];
     result.extend(global_items);
+    result.extend(todo_categories);
     result.extend(all_items);
 
     result
