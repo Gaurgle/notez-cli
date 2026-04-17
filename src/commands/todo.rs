@@ -643,7 +643,7 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
             fs::write(&path, serialize_todos_for_file(&items, &path))
                 .expect("failed to write TODO.md");
 
-            if !global && !public {
+            if !global {
                 let home_dir = project::ensure_home_project_dir(&config);
                 project::mirror_file_to_home(&path, &home_dir);
             }
@@ -680,6 +680,8 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
                 }
                 fs::write(&path, serialize_todos_for_file(&updated, &path))
                     .expect("failed to write TODO.md");
+                let home_dir = project::ensure_home_project_dir(&config);
+                project::mirror_file_to_home(&path, &home_dir);
             } else {
                 // Local mode shows both private + public, save each to its own file
                 save_all_todos(&updated);

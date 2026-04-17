@@ -30,7 +30,7 @@ pub fn run_log(global: bool, public: bool, message: Vec<String>) {
 
     let file_path = append_log_entry(&logs_dir, &date, &time, &msg);
 
-    if !global && !public {
+    if !global {
         let home_dir = project::ensure_home_project_dir(&config);
         project::mirror_dir_to_home(&logs_dir, &home_dir);
     }

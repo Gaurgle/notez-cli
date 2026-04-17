@@ -49,7 +49,7 @@ pub fn run_mkdir(global: bool, public: bool, name_parts: Vec<String>) {
                 colors.sapphire.apply_to(&full_name)
             );
 
-            if !global && !public {
+            if !global {
                 let created_dir = root.join(&full_name);
                 let home_dir = project::ensure_home_project_dir(&config);
                 project::mirror_dir_to_home(&created_dir, &home_dir);

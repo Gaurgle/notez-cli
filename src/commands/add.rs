@@ -41,8 +41,8 @@ pub fn run_add(global: bool, public: bool, title: Option<String>, target: Option
         colors.sapphire.apply_to(file_path.file_name().unwrap().to_str().unwrap())
     );
 
-    // Only symlink private notes to home
-    if !global && !public {
+    // Mirror local notes (public or private) into ~/notez/ so they're globally visible
+    if !global {
         let home_dir = project::ensure_home_project_dir(&config);
         project::mirror_dir_to_home(&target_dir, &home_dir);
     }
