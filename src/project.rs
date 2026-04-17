@@ -78,14 +78,18 @@ pub fn resolve_daily_logs_dir(config: &Config, global: bool, public: bool) -> Pa
     }
 }
 
-/// Auto-add .notez/ to .gitignore if not already there.
+/// Auto-add .notez to .gitignore if not already there.
+/// Uses the no-slash form so the rule also matches when .notez is a symlink.
 pub fn ensure_gitignore() {
     let cwd = std::env::current_dir().unwrap_or_default();
     let gitignore = cwd.join(".gitignore");
-    let entry = ".notez/";
+    let entry = ".notez";
 
     if let Ok(content) = std::fs::read_to_string(&gitignore) {
-        if content.lines().any(|l| l.trim() == entry) {
+        if content.lines().any(|l| {
+            let t = l.trim();
+            t == ".notez" || t == ".notez/"
+        }) {
             return;
         }
     }
