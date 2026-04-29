@@ -9,7 +9,14 @@ use crate::config::Config;
 use crate::numbering;
 use crate::project;
 
-pub fn run_add(global: bool, public: bool, title: Option<String>, target: Option<String>, body: Option<String>) {
+pub fn run_add(
+    global: bool,
+    public: bool,
+    title: Option<String>,
+    target: Option<String>,
+    in_local: bool,
+    body: Option<String>,
+) {
     let config = Config::require();
     let date = Local::now().format("%Y-%m-%d").to_string();
     let raw_title = title.unwrap_or_else(|| "untitled".into());
@@ -19,16 +26,23 @@ pub fn run_add(global: bool, public: bool, title: Option<String>, target: Option
         project::ensure_gitignore();
     }
 
-    let root = project::resolve_notez_dir(&config, global, public);
-
-    let target_dir = match target {
+    // For --in / --in <name>, the picker (and explicit-name resolution) defaults
+    // to the global root unless --in-local is set. Quick-notes (no --in) keeps
+    // the existing -g semantics.
+    let target_dir = match &target {
         None => {
             let dir = project::resolve_quick_notes_dir(&config, global, public);
             fs::create_dir_all(&dir).expect("failed to create quick notes directory");
             dir
         }
-        Some(explicit) if !explicit.is_empty() => resolve_target_dir(&root, &explicit),
-        Some(_) => pick_directory(&config, &root),
+        Some(explicit) if !explicit.is_empty() => {
+            let in_root = project::resolve_notez_dir(&config, !in_local, public);
+            resolve_target_dir(&in_root, explicit)
+        }
+        Some(_) => {
+            let in_root = project::resolve_notez_dir(&config, !in_local, public);
+            pick_directory(&config, &in_root)
+        }
     };
 
     let file_path = create_note_file(&target_dir, &date, &clean_title, body.as_deref());
@@ -41,8 +55,12 @@ pub fn run_add(global: bool, public: bool, title: Option<String>, target: Option
         colors.sapphire.apply_to(file_path.file_name().unwrap().to_str().unwrap())
     );
 
-    // Mirror local notes (public or private) into ~/notez/ so they're globally visible
-    if !global {
+    // Mirror only when the note actually landed inside the local notez (private
+    // or public). A note saved directly under ~/notez/ doesn't need mirroring.
+    let local_private = project::local_private_dir();
+    let local_public = project::local_public_dir();
+    let landed_local = target_dir.starts_with(&local_private) || target_dir.starts_with(&local_public);
+    if landed_local {
         let home_dir = project::ensure_home_project_dir(&config);
         project::mirror_dir_to_home(&target_dir, &home_dir);
     }

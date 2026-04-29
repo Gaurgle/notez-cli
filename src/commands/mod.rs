@@ -6,6 +6,7 @@ pub mod edit;
 pub mod init;
 pub mod log;
 pub mod mkdir;
+pub mod nav;
 pub mod search;
 pub mod todo;
 pub mod tree;
