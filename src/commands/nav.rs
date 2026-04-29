@@ -1,9 +1,11 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
 use crate::colors::Colors;
 use crate::config::Config;
 use crate::numbering;
+use crate::project;
 
 /// Open a directory picker over `~/notez/`, then open the chosen directory in yazi.
 pub fn run_nav() {
@@ -51,10 +53,25 @@ fn pick_directory(
     root: &Path,
     dirs: &[numbering::NumberedDir],
 ) -> std::path::PathBuf {
+    // Project-mirrored dirs (one per project that has saved local notes) get the
+    // lock icon; everything else (created via `notez -g mkdir`) gets the globe.
+    let mirrored: HashSet<String> = project::ProjectMapping::load()
+        .projects
+        .keys()
+        .cloned()
+        .collect();
+    let icon_for = |name: &str| {
+        if mirrored.contains(name) {
+            project::ICON_PRIVATE
+        } else {
+            project::ICON_PUBLIC
+        }
+    };
+
     if config.has_fzf {
         let input: String = dirs
             .iter()
-            .map(|d| format!("{:02}  {}", d.number, d.name))
+            .map(|d| format!("{:02}  {}  {}", d.number, icon_for(&d.name), d.name))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -88,7 +105,7 @@ fn pick_directory(
     } else {
         let items: Vec<String> = dirs
             .iter()
-            .map(|d| format!("{:02}  {}", d.number, d.name))
+            .map(|d| format!("{:02}  {}  {}", d.number, icon_for(&d.name), d.name))
             .collect();
         let selection = dialoguer::Select::new()
             .with_prompt("Navigate to")
