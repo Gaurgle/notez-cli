@@ -150,30 +150,45 @@ A full interactive todo manager, installed as a standalone command alongside not
 | `x` / `space` / `Enter` | Check/uncheck (on parent: toggles all subtasks) |
 | `a` | Almost done `[/]` |
 | `n` | New todo |
+| `N` | New top-level category (global view only) |
 | `s` | Add subtask (two levels deep) |
 | `e` | Edit text (←/→ to move cursor) |
 | `d` | Delete (y/n confirm) |
-| `t` | Tags — press `1`-`5` to toggle colored flags |
+| `t` | Tag mode — `1`-`5` toggle, `t` again to close (multi-tag friendly) |
 | `f` | Focus section (toggle — collapses all others) |
-| `/` | Search / filter todos (shown in title bar) |
-| `J` / `K` | Move todo down / up (reorder) |
+| `/` | Filter — fuzzy text + `#tagname` (or click strip dots) |
+| `J` / `K` | Move todo down / up (block-aware: subtree moves with parent) |
 | `h` / `l` | Collapse / expand (subtasks + project sections) |
 | `v` | Toggle view all / collapse all |
 | `j` / `k` / mouse scroll | Navigate |
 | `?` | Help overlay |
 | `q` / `Esc` / `Ctrl+C` / `:wq` | Quit (`Esc` clears search first) |
 
+**Mouse:**
+
+| Action | Effect |
+|---|---|
+| Click section header | Toggle expand / collapse |
+| Click body of a parent task | Toggle expand / collapse |
+| Click a tag dot on a row | Toggle that tag on the task |
+| Hover a tag dot | Faint preview of the tag color |
+| Click the filter strip (left of search) | Toggle that tag in the active filter |
+| Click the search field | Enter typing mode |
+| Click + drag a row | Reorder within the same section / depth |
+
 **Todo states:** `[ ]` unchecked → `[/]` almost done → `[x]` checked
 
 **Subtasks:** Two levels deep — press `s` on any todo or subtask to nest under it. Parent state auto-derived from child completion.
 
-**Tags:** 5 colored flags (●) shown to the left of each todo: important (red), priority (orange), long-term (yellow), idea (blue), blocked (purple). Press `t` then `1`-`5` to toggle. Tags stack and are persisted as `#important #prio #longterm #idea #blocked` in the markdown. Section headers aggregate tags from their children.
+**Tags:** 5 colored flags (●) shown to the left of each todo: important (red), priority (orange), long-term (yellow), idea (blue), blocked (purple). Toggle by clicking the dot, or press `t` to enter tag mode and use `1`-`5`. Tag mode stays open across navigation so you can tag multiple tasks in one go — press `t` again (or `Esc`) to close. Tags stack and are persisted as `#important #prio #longterm #idea #blocked` in the markdown. Section headers and parent tasks aggregate tags from their children.
+
+**Categories (`-g`):** Top-level groups under `~/notez/_todos/<name>/TODO.md`. Press `N` in global view to create a new one — alphabetically sorted alongside the rest.
 
 **Focus mode:** Press `f` to focus the current section — all others collapse. Navigate between sections and focus auto-follows. Press `f` again to restore the previous view.
 
-**Search:** Press `/` to filter todos from the title bar. `Enter` keeps the filter active, `Esc` clears it. Filters both todos and section headers.
+**Filter:** Press `/` (or click the search field) to start filtering. Text matches fuzzily; `#tagname` filters by tag with prefix support — `#imp` matches `#important`, `#i` matches `#important` and `#idea`, `#1`–`#5` reference tags by index, `#13` = tag 1 ∪ tag 3, `#` alone matches anything tagged. Multiple tokens combine with AND across, OR within. Click the dim dots next to the search field to toggle tags directly. `Enter` keeps the filter active, `Esc` clears it. Filter auto-expands matching sections so results are immediately visible.
 
-**Reorder:** `J`/`K` (shift) moves a todo up or down within its section and level.
+**Reorder:** `J`/`K` (shift) moves a todo up or down within its section, taking subtasks with it. Mouse: click + drag a row to reorder.
 
 **Code TODOs:** Automatically scans project source for `// TODO`, `# TODO`, `-- TODO`, `/* TODO`, `<!-- TODO` comments. Displayed as a read-only section with file path and line number — visible alongside your todos but non-interactive.
 

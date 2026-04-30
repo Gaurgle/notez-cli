@@ -252,6 +252,15 @@ fn print_help() {
 }
 
 fn main() {
+    // Restore terminal state on any panic — otherwise a crash inside the TUI
+    // leaves the user stuck in raw mode + alt screen with mouse capture on,
+    // and escape sequences leaking to stdin until they kill the session.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = tui::leave();
+        default_hook(info);
+    }));
+
     // Check if invoked via symlink (e.g., todoz, zlog, znote)
     let argv0 = std::env::args().next().unwrap_or_default();
     let bin_name = std::path::Path::new(&argv0)
