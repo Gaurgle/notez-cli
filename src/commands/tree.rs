@@ -2,11 +2,16 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crossterm::event::{self, Event, KeyCode, MouseEventKind};
+use crossterm::event::{self, Event, KeyCode, MouseButton, MouseEventKind};
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Padding, Paragraph};
 
-use crate::commands::todo::{FLAG_COLORS, FLAG_SHAPES, FLAG_DEFS, flags_slots};
+use crate::commands::todo::{
+    FLAG_COLORS, FLAG_SHAPES, FLAG_DEFS, flags_slots,
+    dim_color, fuzzy_match, match_tag_prefix, mouse_x_to_filter_dot,
+    parse_filter, parse_filter_sets, toggle_filter_tag,
+    prev_char_boundary, next_char_boundary,
+};
 use crate::config::Config;
 use crate::numbering;
 use crate::project;
@@ -226,14 +231,31 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
     let mut flag_mode = false;
     let mut preview_scroll: u16 = 0;
     let mut last_preview_idx: usize = usize::MAX; // track selection changes to reset scroll
+    let mut filter_strip_area: Rect = Rect::default();
+    let mut list_inner_area: Rect = Rect::default();
+    let mut visible_for_mouse: Vec<usize> = Vec::new();
+    let mut prev_filter: (String, u8) = (String::new(), 0);
 
     loop {
         derive_dir_flags(&mut nodes);
-        let mut visible = get_visible_nodes(&nodes);
-        if !search_buffer.is_empty() {
-            let query = search_buffer.to_lowercase();
-            visible.retain(|&i| nodes[i].name.to_lowercase().contains(&query));
+
+        // Auto-expand directories that contain filter matches whenever the filter
+        // changes — without this, matches inside collapsed dirs stay hidden.
+        let cur_filter = parse_filter(&search_buffer);
+        let filter_active = !cur_filter.0.is_empty() || cur_filter.1 != 0;
+        let filter_changed = cur_filter != prev_filter;
+        if filter_active && filter_changed {
+            let (text_q, tag_sets) = parse_filter_sets(&search_buffer);
+            let keep = compute_node_filter_keep(&nodes, &text_q, &tag_sets);
+            for (i, k) in keep.iter().enumerate() {
+                if *k && nodes[i].is_dir {
+                    nodes[i].expanded = true;
+                }
+            }
         }
+        prev_filter = cur_filter.clone();
+
+        let visible = compute_visible_with_filter(&nodes, &search_buffer);
         let sel = state.selected().unwrap_or(0);
         let real_idx = visible.get(sel).copied().unwrap_or(0);
 
@@ -324,27 +346,72 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                     })
                     .collect();
 
-                let mut title_spans = vec![
+                let title_spans = vec![
                     Span::styled(format!(" {} ", title), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
                     Span::styled("— ", Style::default().fg(theme::SURFACE)),
                     Span::styled(format!("{} ", title_path), Style::default().fg(theme::OVERLAY)),
                 ];
+                let header = Line::from(title_spans);
+
+                // Build the filter strip for the left pane (mirrors todoz UX).
+                let (_, active_tags) = parse_filter(&search_buffer);
+                let mut filter_spans: Vec<Span> = Vec::new();
+                filter_spans.push(Span::raw("     ")); // 4 highlight indent + 1 flag-leading space
+                let bits = [
+                    crate::commands::todo::FLAG_IMPORTANT,
+                    crate::commands::todo::FLAG_PRIO,
+                    crate::commands::todo::FLAG_LONGTERM,
+                    crate::commands::todo::FLAG_IDEA,
+                    crate::commands::todo::FLAG_BLOCKED,
+                ];
+                for (i, &bit) in bits.iter().enumerate() {
+                    let is_active = active_tags & bit != 0;
+                    let style = if is_active {
+                        Style::default().fg(FLAG_COLORS[i]).add_modifier(ratatui::style::Modifier::BOLD)
+                    } else {
+                        Style::default().fg(dim_color(FLAG_COLORS[i]))
+                    };
+                    filter_spans.push(Span::styled(FLAG_SHAPES[i].to_string(), style));
+                }
+                filter_spans.push(Span::raw("  "));
                 if search_mode {
                     let (before, after) = search_buffer.split_at(cursor_pos.min(search_buffer.len()));
                     let cursor_char = after.chars().next().map(|c| c.to_string()).unwrap_or_else(|| " ".to_string());
                     let rest = if after.len() > cursor_char.len() { &after[cursor_char.len()..] } else { "" };
-                    title_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
-                    title_spans.push(Span::styled(before.to_string(), Style::default().fg(theme::TEXT)));
-                    title_spans.push(Span::styled(cursor_char, Style::default().fg(theme::BASE).bg(theme::SAPPHIRE)));
-                    title_spans.push(Span::styled(format!("{} ", rest), Style::default().fg(theme::TEXT)));
+                    filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
+                    filter_spans.push(Span::styled(before.to_string(), Style::default().fg(theme::TEXT)));
+                    filter_spans.push(Span::styled(cursor_char, Style::default().fg(theme::BASE).bg(theme::SAPPHIRE)));
+                    filter_spans.push(Span::styled(rest.to_string(), Style::default().fg(theme::TEXT)));
+                    if search_buffer.is_empty() {
+                        filter_spans.push(Span::styled(
+                            "  text + #tag or click a dot",
+                            Style::default().fg(Color::Rgb(80, 80, 95)),
+                        ));
+                    }
                 } else if !search_buffer.is_empty() {
-                    title_spans.push(Span::styled(format!("/{}", search_buffer), Style::default().fg(theme::YELLOW)));
-                    title_spans.push(Span::styled("  esc to clear ", Style::default().fg(theme::OVERLAY)));
+                    filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
+                    for word in search_buffer.split(' ') {
+                        if word.is_empty() { continue; }
+                        let mut tag_color: Option<Color> = None;
+                        if let Some(name) = word.strip_prefix('#') {
+                            for (idx, &(_, tag_name, _, _)) in FLAG_DEFS.iter().enumerate() {
+                                if tag_name.eq_ignore_ascii_case(name) {
+                                    tag_color = Some(FLAG_COLORS[idx]);
+                                    break;
+                                }
+                            }
+                        }
+                        let style = match tag_color {
+                            Some(c) => Style::default().fg(c).add_modifier(ratatui::style::Modifier::BOLD),
+                            None => Style::default().fg(theme::YELLOW),
+                        };
+                        filter_spans.push(Span::styled(format!("{} ", word), style));
+                    }
+                    filter_spans.push(Span::styled(" esc to clear ", Style::default().fg(theme::OVERLAY)));
                 } else {
-                    title_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
-                    title_spans.push(Span::styled("search ", Style::default().fg(theme::OVERLAY)));
+                    filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
+                    filter_spans.push(Span::styled("filter", Style::default().fg(theme::OVERLAY)));
                 }
-                let header = Line::from(title_spans);
 
                 let block = Block::default()
                     .title(header)
@@ -353,12 +420,35 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                     .border_type(ratatui::widgets::BorderType::Rounded)
                     .padding(Padding::new(1, 1, 1, 0));
 
+                // Carve out [filter strip, divider, list] inside the block.
+                let inner = block.inner(chunks[0]);
+                let inner_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(1), // filter strip
+                        Constraint::Length(1), // dim divider
+                        Constraint::Min(1),    // list
+                    ])
+                    .split(inner);
+                let filter_strip_rect = inner_chunks[0];
+                let divider_rect = inner_chunks[1];
+                let list_inner_rect = inner_chunks[2];
+                filter_strip_area = filter_strip_rect;
+                list_inner_area = list_inner_rect;
+                visible_for_mouse = visible.clone();
+
+                frame.render_widget(block, chunks[0]);
+                frame.render_widget(Paragraph::new(Line::from(filter_spans)), filter_strip_rect);
+                let divider_line = Line::from(Span::styled(
+                    "─".repeat(divider_rect.width as usize),
+                    Style::default().fg(Color::Rgb(50, 50, 65)),
+                ));
+                frame.render_widget(Paragraph::new(divider_line), divider_rect);
+
                 let list = List::new(items)
-                    .block(block)
                     .highlight_style(theme::selected())
                     .highlight_symbol("  ▸ ");
-
-                frame.render_stateful_widget(list, chunks[0], &mut state);
+                frame.render_stateful_widget(list, list_inner_rect, &mut state);
 
                 // Reset preview scroll when selection changes
                 if real_idx != last_preview_idx {
@@ -459,13 +549,13 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                         Span::styled(" tags: ", Style::default().fg(theme::MAUVE)),
                     ];
                     for (idx, &(bit, _, _, label)) in FLAG_DEFS.iter().enumerate() {
-                        let num = format!("{}:", idx + 1);
                         let active = cur_flags & bit != 0;
                         let color = FLAG_COLORS[idx];
-                        let dim = theme::SURFACE;
-                        spans.push(Span::styled(num, Style::default().fg(if active { theme::TEXT } else { theme::OVERLAY })));
-                        spans.push(Span::styled(FLAG_SHAPES[idx].to_string(), Style::default().fg(if active { color } else { dim })));
-                        spans.push(Span::styled(format!("{}  ", label), Style::default().fg(if active { color } else { theme::OVERLAY })));
+                        // Number: tag color. Colon: gray. Label: tag color when active, gray otherwise.
+                        spans.push(Span::styled(format!("{}", idx + 1), Style::default().fg(color)));
+                        spans.push(Span::styled(":", Style::default().fg(theme::OVERLAY)));
+                        spans.push(Span::styled(format!("{} ", label), Style::default().fg(if active { color } else { theme::OVERLAY })));
+                        spans.push(Span::styled(" ", Style::default()));
                     }
                     Line::from(spans)
                 } else {
@@ -500,7 +590,8 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                         Line::from(vec![Span::styled("  l", Style::default().fg(theme::MAUVE)), Span::styled("                  expand directory", Style::default().fg(theme::TEXT))]),
                         Line::from(vec![Span::styled("  h", Style::default().fg(theme::MAUVE)), Span::styled("                  collapse / go to parent", Style::default().fg(theme::TEXT))]),
                         Line::from(vec![Span::styled("  f", Style::default().fg(theme::GREEN)), Span::styled("                  focus directory", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  /", Style::default().fg(theme::YELLOW)), Span::styled("                  search (in title bar)", Style::default().fg(theme::TEXT))]),
+                        Line::from(vec![Span::styled("  /", Style::default().fg(theme::YELLOW)), Span::styled("                  filter — fuzzy text + #tagname, or click a dot", Style::default().fg(theme::TEXT))]),
+                        Line::from(vec![Span::styled("  t", Style::default().fg(theme::PEACH)), Span::styled("                  tag mode (1-5 toggle, t again to close)", Style::default().fg(theme::TEXT))]),
                         Line::from(vec![Span::styled("  v", Style::default().fg(theme::SAPPHIRE)), Span::styled("                  view all / collapse all", Style::default().fg(theme::TEXT))]),
                         Line::from(vec![Span::styled("  j/k", Style::default().fg(theme::TEXT)), Span::styled("                navigate", Style::default().fg(theme::TEXT))]),
                         Line::from(vec![Span::styled("  q", Style::default().fg(theme::PEACH)), Span::styled("                  quit", Style::default().fg(theme::TEXT))]),
@@ -525,7 +616,8 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
 
         let ev = event::read().expect("failed to read event");
 
-        // Mouse scroll — scrolls preview pane
+        // Mouse: scroll the preview pane, click filter-strip dots, or click the
+        // search field to enter typing mode.
         if let Event::Mouse(mouse) = ev {
             match mouse.kind {
                 MouseEventKind::ScrollDown => {
@@ -533,6 +625,46 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 }
                 MouseEventKind::ScrollUp => {
                     preview_scroll = preview_scroll.saturating_sub(3);
+                }
+                MouseEventKind::Down(MouseButton::Left) => {
+                    if mouse.row == filter_strip_area.y {
+                        if let Some(d) = mouse_x_to_filter_dot(mouse.column, filter_strip_area.x) {
+                            toggle_filter_tag(&mut search_buffer, FLAG_DEFS[d as usize].1);
+                            cursor_pos = search_buffer.len();
+                            continue;
+                        }
+                        // Anywhere else on the strip → enter typing mode.
+                        search_mode = true;
+                        cursor_pos = search_buffer.len();
+                        continue;
+                    }
+                    // Click on a list row: toggle directories, select files,
+                    // click a tag dot to toggle that tag (files only).
+                    if mouse.row >= list_inner_area.y
+                        && mouse.row < list_inner_area.y.saturating_add(list_inner_area.height)
+                        && mouse.column >= list_inner_area.x
+                        && mouse.column < list_inner_area.x.saturating_add(list_inner_area.width)
+                    {
+                        let list_row = (mouse.row - list_inner_area.y) as usize;
+                        let vis_idx = state.offset() + list_row;
+                        if let Some(&real) = visible_for_mouse.get(vis_idx) {
+                            if let Some(pos) = visible_for_mouse.iter().position(|&i| i == real) {
+                                state.select(Some(pos));
+                            }
+                            // Tag dot click on a file → toggle that tag.
+                            if !nodes[real].is_dir {
+                                if let Some(d) = mouse_x_to_filter_dot(mouse.column, list_inner_area.x) {
+                                    nodes[real].flags ^= FLAG_DEFS[d as usize].0;
+                                    continue;
+                                }
+                            }
+                            // Otherwise: dirs toggle, files just select.
+                            if nodes[real].is_dir {
+                                nodes[real].expanded = !nodes[real].expanded;
+                            }
+                        }
+                        continue;
+                    }
                 }
                 _ => {}
             }
@@ -553,6 +685,7 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
 
             // Flag mode
             if flag_mode {
+                let mut consumed = true;
                 match key.code {
                     KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Char('3') |
                     KeyCode::Char('4') | KeyCode::Char('5') => {
@@ -561,17 +694,32 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             _ => unreachable!(),
                         };
                         if idx < FLAG_DEFS.len() {
-                            let visible = get_visible_nodes(&nodes);
+                            let visible = compute_visible_with_filter(&nodes, &search_buffer);
                             let vs = state.selected().unwrap_or(0);
                             let ri = visible.get(vs).copied().unwrap_or(0);
-                            if ri < nodes.len() {
+                            if ri < nodes.len() && !nodes[ri].is_dir {
                                 nodes[ri].flags ^= FLAG_DEFS[idx].0;
                             }
                         }
                     }
-                    _ => { flag_mode = false; }
+                    KeyCode::Char('t') | KeyCode::Esc => {
+                        flag_mode = false;
+                    }
+                    // `/` is a global shortcut: exit flag mode AND pass the key through
+                    // so the search/filter handler picks it up.
+                    KeyCode::Char('/') => {
+                        flag_mode = false;
+                        consumed = false;
+                    }
+                    KeyCode::Char('j') | KeyCode::Down |
+                    KeyCode::Char('k') | KeyCode::Up |
+                    KeyCode::Char('h') | KeyCode::Left |
+                    KeyCode::Char('l') | KeyCode::Right => {
+                        consumed = false;
+                    }
+                    _ => {}
                 }
-                continue;
+                if consumed { continue; }
             }
 
             // Search mode
@@ -584,18 +732,19 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             search_buffer.clear();
                         }
                     }
-                    KeyCode::Left => { cursor_pos = cursor_pos.saturating_sub(1); }
-                    KeyCode::Right => { if cursor_pos < search_buffer.len() { cursor_pos += 1; } }
+                    KeyCode::Left => { cursor_pos = prev_char_boundary(&search_buffer, cursor_pos); }
+                    KeyCode::Right => { cursor_pos = next_char_boundary(&search_buffer, cursor_pos); }
                     KeyCode::Backspace => {
                         if cursor_pos > 0 {
-                            search_buffer.remove(cursor_pos - 1);
-                            cursor_pos -= 1;
+                            let prev = prev_char_boundary(&search_buffer, cursor_pos);
+                            search_buffer.remove(prev);
+                            cursor_pos = prev;
                         } else {
                             search_buffer.clear();
                             search_mode = false;
                         }
                     }
-                    KeyCode::Char(c) => { search_buffer.insert(cursor_pos, c); cursor_pos += 1; }
+                    KeyCode::Char(c) => { search_buffer.insert(cursor_pos, c); cursor_pos += c.len_utf8(); }
                     _ => {}
                 }
                 state.select(Some(0));
@@ -612,7 +761,7 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 continue;
             }
 
-            let visible = get_visible_nodes(&nodes);
+            let visible = compute_visible_with_filter(&nodes, &search_buffer);
             let selected = state.selected().unwrap_or(0);
             let real_idx = visible.get(selected).copied().unwrap_or(0);
 
@@ -885,23 +1034,74 @@ fn build_children(dir: &Path, depth: usize, parent_idx: Option<usize>, nodes: &m
 
 /// Find the top-level (depth 0) directory containing the given node.
 /// Aggregate flags from children onto parent directories.
+/// Recomputes directory flags as the OR of their direct children's flags.
+/// Must reassign (not OR) so that bits drop when a child loses a tag — the old
+/// `|=` left stale dots stuck on parent directories forever.
 fn derive_dir_flags(nodes: &mut Vec<TreeNode>) {
     let len = nodes.len();
     for i in (0..len).rev() {
         if !nodes[i].is_dir { continue; }
         let mut agg: u8 = 0;
         for j in (i + 1)..len {
-            // Only direct children (parent_idx == i)
             if nodes[j].parent_idx == Some(i) {
                 agg |= nodes[j].flags;
             }
-            // Stop when we've passed all descendants
             if nodes[j].depth <= nodes[i].depth && j > i + 1 {
                 break;
             }
         }
-        nodes[i].flags |= agg;
+        nodes[i].flags = agg;
     }
+}
+
+fn node_matches(node: &TreeNode, text_query: &str, tag_sets: &[u8]) -> bool {
+    if !text_query.is_empty() && !fuzzy_match(&node.name, text_query) {
+        return false;
+    }
+    for set in tag_sets {
+        if node.flags & set == 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Mark every node that matches the filter and walk back up to include all of its
+/// ancestors so the filter result still has tree context.
+fn compute_node_filter_keep(nodes: &[TreeNode], text_query: &str, tag_sets: &[u8]) -> Vec<bool> {
+    let n = nodes.len();
+    let mut keep = vec![false; n];
+    for i in 0..n {
+        if node_matches(&nodes[i], text_query, tag_sets) {
+            keep[i] = true;
+        }
+    }
+    for i in 0..n {
+        if !keep[i] { continue; }
+        let mut cur = nodes[i].parent_idx;
+        while let Some(p) = cur {
+            if keep[p] { break; }
+            keep[p] = true;
+            cur = nodes[p].parent_idx;
+        }
+    }
+    keep
+}
+
+/// Visible-list builder used by both the render closure and the keyboard handler
+/// so cursor positions and rendered rows stay in sync when a filter is active.
+fn compute_visible_with_filter(nodes: &[TreeNode], search_buffer: &str) -> Vec<usize> {
+    if search_buffer.trim().is_empty() {
+        return get_visible_nodes(nodes);
+    }
+    let (text_q, tag_sets) = parse_filter_sets(search_buffer);
+    if text_q.is_empty() && tag_sets.is_empty() {
+        return get_visible_nodes(nodes);
+    }
+    let keep = compute_node_filter_keep(nodes, &text_q, &tag_sets);
+    let mut v = get_visible_nodes(nodes);
+    v.retain(|&i| keep[i]);
+    v
 }
 
 fn find_top_dir(nodes: &[TreeNode], idx: usize) -> Option<usize> {

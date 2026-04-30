@@ -46,7 +46,7 @@ pub const FLAG_DEFS: [(u8, &str, &str, &str); 5] = [
 
 /// Move a byte cursor left by one char in `s`. Always lands on a UTF-8 boundary,
 /// so callers can safely pass the result to `split_at` / `insert` / `remove`.
-fn prev_char_boundary(s: &str, pos: usize) -> usize {
+pub fn prev_char_boundary(s: &str, pos: usize) -> usize {
     if pos == 0 { return 0; }
     let mut i = pos - 1;
     while i > 0 && !s.is_char_boundary(i) {
@@ -56,7 +56,7 @@ fn prev_char_boundary(s: &str, pos: usize) -> usize {
 }
 
 /// Move a byte cursor right by one char in `s`. Always lands on a UTF-8 boundary.
-fn next_char_boundary(s: &str, pos: usize) -> usize {
+pub fn next_char_boundary(s: &str, pos: usize) -> usize {
     let len = s.len();
     if pos >= len { return len; }
     let mut i = pos + 1;
@@ -122,7 +122,7 @@ pub fn flags_slots(flags: u8) -> Vec<Span<'static>> {
 ///   (so `#13` = tag 1 ∪ tag 3, `#12345` = all). Out-of-range digits are ignored.
 /// - `#name` → all tags whose name starts with `name` (case-insensitive prefix)
 /// - non-`#` words or unknown prefixes → 0
-fn match_tag_prefix(word: &str) -> u8 {
+pub fn match_tag_prefix(word: &str) -> u8 {
     let Some(name) = word.strip_prefix('#') else { return 0; };
     if name.is_empty() {
         return FLAG_DEFS.iter().fold(0u8, |a, &(b, _, _, _)| a | b);
@@ -151,7 +151,7 @@ fn match_tag_prefix(word: &str) -> u8 {
 /// Display-side parse: returns (text query, OR of all matched tag bits).
 /// Used to know "which dots should light up" — losing the per-token grouping
 /// is fine for display since the dots are a flat indicator.
-fn parse_filter(buffer: &str) -> (String, u8) {
+pub fn parse_filter(buffer: &str) -> (String, u8) {
     let mut text_parts: Vec<&str> = Vec::new();
     let mut tags: u8 = 0;
     for word in buffer.split_whitespace() {
@@ -169,7 +169,7 @@ fn parse_filter(buffer: &str) -> (String, u8) {
 /// Each entry in `tag_sets` represents one `#token`'s candidate tags — the item
 /// must have AT LEAST ONE tag from each set. So `#prio #i` requires `prio` AND
 /// (`important` OR `idea`).
-fn parse_filter_sets(buffer: &str) -> (String, Vec<u8>) {
+pub fn parse_filter_sets(buffer: &str) -> (String, Vec<u8>) {
     let mut text_parts: Vec<&str> = Vec::new();
     let mut tag_sets: Vec<u8> = Vec::new();
     for word in buffer.split_whitespace() {
@@ -185,7 +185,7 @@ fn parse_filter_sets(buffer: &str) -> (String, Vec<u8>) {
 
 /// Subsequence (fuzzy) match: every char of `query` appears in `text` in order,
 /// not necessarily contiguously. Case-insensitive, Unicode-aware.
-fn fuzzy_match(text: &str, query: &str) -> bool {
+pub fn fuzzy_match(text: &str, query: &str) -> bool {
     if query.is_empty() { return true; }
     let text_l = text.to_lowercase();
     let query_l = query.to_lowercase();
@@ -290,7 +290,7 @@ fn mouse_x_to_dot(mouse_col: u16, list_area_x: u16) -> Option<u8> {
 /// Same dot-column mapping but for the filter strip, which has no highlight_symbol
 /// indent — the dots sit directly after a 5-col padding (matching the visual offset
 /// of dot 0 in list rows: 4 highlight cols + 1 flag-leading space).
-fn mouse_x_to_filter_dot(mouse_col: u16, strip_x: u16) -> Option<u8> {
+pub fn mouse_x_to_filter_dot(mouse_col: u16, strip_x: u16) -> Option<u8> {
     let dot_start = strip_x.saturating_add(5);
     let dot_end = dot_start + 4;
     if mouse_col >= dot_start && mouse_col <= dot_end {
@@ -303,7 +303,7 @@ fn mouse_x_to_filter_dot(mouse_col: u16, strip_x: u16) -> Option<u8> {
 /// Darken an RGB color by ~3x. Used for the inactive ("dim") tag dots in the
 /// filter strip — relying on the DIM modifier alone is too subtle in many
 /// terminals, so we just compute a darker concrete color instead.
-fn dim_color(c: Color) -> Color {
+pub fn dim_color(c: Color) -> Color {
     match c {
         Color::Rgb(r, g, b) => Color::Rgb(r / 3, g / 3, b / 3),
         other => other,
@@ -312,7 +312,7 @@ fn dim_color(c: Color) -> Color {
 
 /// Toggle a `#tagname` token in the filter buffer. Adds it if not present, removes
 /// it if it is. Whitespace is normalized so the buffer stays clean.
-fn toggle_filter_tag(buffer: &mut String, tag_name: &str) {
+pub fn toggle_filter_tag(buffer: &mut String, tag_name: &str) {
     let marker = format!("#{}", tag_name);
     let mut found = false;
     let mut new_words: Vec<String> = Vec::new();
@@ -1688,6 +1688,7 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
             // Flag mode — stays open until `t` or Esc, so the user can tag several
             // tasks in one go (navigate with j/k between toggles, etc.).
             if flag_mode {
+                let mut consumed = true;
                 match key.code {
                     KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Char('3') |
                     KeyCode::Char('4') | KeyCode::Char('5') => {
@@ -1699,31 +1700,29 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             let vis = compute_visible(&items, &search_buffer);
                             let vs = state.selected().unwrap_or(0);
                             let ri = vis.get(vs).copied().unwrap_or(0);
-                            // Headers/code-todos can't carry user-set tags — silently no-op.
                             if ri < items.len() && !items[ri].is_header && !items[ri].is_code_todo {
                                 items[ri].flags ^= FLAG_DEFS[idx].0;
                             }
                         }
-                        continue;
                     }
                     KeyCode::Char('t') | KeyCode::Esc => {
                         flag_mode = false;
-                        continue;
                     }
-                    // Let navigation keys pass through to the normal handlers so the
-                    // cursor moves while flag_mode is active.
+                    // `/` is a global shortcut — exit flag mode and let the search/filter
+                    // handler pick the key up.
+                    KeyCode::Char('/') => {
+                        flag_mode = false;
+                        consumed = false;
+                    }
                     KeyCode::Char('j') | KeyCode::Down |
                     KeyCode::Char('k') | KeyCode::Up |
                     KeyCode::Char('h') | KeyCode::Left |
                     KeyCode::Char('l') | KeyCode::Right => {
-                        // fall through — don't continue
+                        consumed = false;
                     }
-                    _ => {
-                        // Any other key is swallowed so the user doesn't accidentally
-                        // exit by pressing some random thing while picking tags.
-                        continue;
-                    }
+                    _ => {}
                 }
+                if consumed { continue; }
             }
 
             // Search mode
