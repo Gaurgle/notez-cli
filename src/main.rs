@@ -23,6 +23,10 @@ pub struct Cli {
     #[arg(short = 'p', long = "public", global = true)]
     public: bool,
 
+    /// Open the global directory picker, then launch yazi (alias for `nav`)
+    #[arg(short = 'n', long = "nav", global = true)]
+    nav: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -33,9 +37,12 @@ enum Commands {
     Add {
         /// Note title (defaults to "untitled")
         title: Vec<String>,
-        /// Target directory (fzf picker if flag given without value)
+        /// Target directory (fzf picker if flag given without value). Defaults to global ~/notez/.
         #[arg(long, num_args = 0..=1, default_missing_value = "")]
         r#in: Option<String>,
+        /// With --in: pick from / resolve under the local notez instead of global.
+        #[arg(long = "in-local")]
+        in_local: bool,
     },
     /// Append a timestamped entry to today's daily log
     Log {
@@ -111,10 +118,16 @@ enum Commands {
     Znote {
         /// Note title (defaults to "untitled")
         title: Vec<String>,
-        /// Target directory
+        /// Target directory (fzf picker if flag given without value). Defaults to global ~/notez/.
         #[arg(long, num_args = 0..=1, default_missing_value = "")]
         r#in: Option<String>,
+        /// With --in: pick from / resolve under the local notez instead of global.
+        #[arg(long = "in-local")]
+        in_local: bool,
     },
+    /// Open the global directory picker, then launch yazi
+    #[command(alias = "n")]
+    Nav,
 }
 
 /// Split args into title words and optional body.
@@ -171,8 +184,9 @@ fn print_help() {
     println!("  {}", c.mauve.apply_to("Notes"));
     cmd("notez add [title]", "create a note, open in editor");
     cmd("notez add [title] \"body\"", "create with content, no editor");
-    cmd("notez add [title] --in", "create in a subdirectory (picker)");
-    cmd("notez edit [term]", "open an existing note (fuzzy search)");
+    cmd("notez add [title] --in", "pick a global subdirectory (picker)");
+    cmd("notez add [title] --in --in-local", "pick a local subdirectory instead");
+    cmd("notez edit [term]", "open an existing note (fuzzy across all)");
     println!();
 
     println!("  {}", c.mauve.apply_to("Daily Logs"));
@@ -187,6 +201,7 @@ fn print_help() {
 
     println!("  {}", c.mauve.apply_to("Browse & Organize"));
     cmd("notez", "browse notes in yazi");
+    cmd("notez nav  /  notez -n", "pick a global subdirectory, open in yazi");
     cmd("notez tree", "interactive tree navigator");
     cmd("notez search <term>", "search note content (rg + fzf)");
     cmd("notez mkdir <name>", "create a numbered subdirectory");
@@ -211,6 +226,11 @@ fn print_help() {
         "  {}    {}",
         c.sapphire.apply_to("-g"),
         c.overlay.apply_to("use before subcommand for global ~/notez/")
+    );
+    println!(
+        "  {}    {}",
+        c.sapphire.apply_to("-n"),
+        c.overlay.apply_to("nav: global subdirectory picker → yazi")
     );
     println!(
         "  {}    {}",
@@ -281,18 +301,25 @@ fn main() {
             return;
         }
 
+        if cli.nav {
+            commands::nav::run_nav();
+            return;
+        }
+
         match cli.command {
             Some(Commands::Todoz { item }) => commands::todo::run_todo(cli.global, cli.public, item),
             Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
             Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
             Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
-            Some(Commands::Znote { title, r#in }) => {
+            Some(Commands::Znote { title, r#in, in_local }) => {
                 let (t, body) = split_title_body(title);
-                commands::add::run_add(cli.global, cli.public, t, r#in, body)
+                commands::add::run_add(cli.global, cli.public, t, r#in, in_local, body)
             }
             Some(Commands::Treez) | Some(Commands::Tree) => commands::tree::run_tree(cli.global, cli.public),
-            Some(Commands::Editz { term }) | Some(Commands::Edit { term }) => commands::edit::run_edit(cli.global, cli.public, term),
-            Some(Commands::Findz { term }) | Some(Commands::Search { term }) => commands::search::run_search(cli.global, cli.public, term),
+            // edit/search default to global so all notes are searchable; -g remains a no-op for symmetry.
+            Some(Commands::Editz { term }) | Some(Commands::Edit { term }) => commands::edit::run_edit(true, cli.public, term),
+            Some(Commands::Findz { term }) | Some(Commands::Search { term }) => commands::search::run_search(true, cli.public, term),
+            Some(Commands::Nav) => commands::nav::run_nav(),
             _ => {
                 print_help();
             }
@@ -307,31 +334,39 @@ fn main() {
         return;
     }
 
+    if cli.nav {
+        commands::nav::run_nav();
+        return;
+    }
+
     match cli.command {
         None => commands::browse::run_browse(cli.global, cli.public),
-        Some(Commands::Add { title, r#in }) => {
+        Some(Commands::Add { title, r#in, in_local }) => {
             let (t, body) = split_title_body(title);
-            commands::add::run_add(cli.global, cli.public, t, r#in, body)
+            commands::add::run_add(cli.global, cli.public, t, r#in, in_local, body)
         }
         Some(Commands::Log { message }) => commands::log::run_log(cli.global, cli.public, message),
         Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
         Some(Commands::Mkdir { name }) => commands::mkdir::run_mkdir(cli.global, cli.public, name),
-        Some(Commands::Search { term }) => commands::search::run_search(cli.global, cli.public, term),
+        // search defaults to global so the whole notez tree is searchable; -g remains a no-op for symmetry.
+        Some(Commands::Search { term }) => commands::search::run_search(true, cli.public, term),
         Some(Commands::Tree) => commands::tree::run_tree(cli.global, cli.public),
         Some(Commands::Setup) => setup::run_setup(),
         Some(Commands::Demo { view }) => commands::demo::run_demo(view),
         Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
         Some(Commands::Treez) => commands::tree::run_tree(cli.global, cli.public),
-        Some(Commands::Editz { term }) => commands::edit::run_edit(cli.global, cli.public, term),
-        Some(Commands::Findz { term }) => commands::search::run_search(cli.global, cli.public, term),
+        // edit defaults to global; mirrored local notes show up via symlinks under ~/notez/.
+        Some(Commands::Editz { term }) => commands::edit::run_edit(true, cli.public, term),
+        Some(Commands::Findz { term }) => commands::search::run_search(true, cli.public, term),
         Some(Commands::Completions { shell }) => commands::completions::run_completions(shell),
         Some(Commands::Init { shell }) => commands::init::run_init(shell),
         Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
         Some(Commands::Todoz { item }) => commands::todo::run_todo(cli.global, cli.public, item),
-        Some(Commands::Edit { term }) => commands::edit::run_edit(cli.global, cli.public, term),
-        Some(Commands::Znote { title, r#in }) => {
+        Some(Commands::Edit { term }) => commands::edit::run_edit(true, cli.public, term),
+        Some(Commands::Nav) => commands::nav::run_nav(),
+        Some(Commands::Znote { title, r#in, in_local }) => {
             let (t, body) = split_title_body(title);
-            commands::add::run_add(cli.global, cli.public, t, r#in, body)
+            commands::add::run_add(cli.global, cli.public, t, r#in, in_local, body)
         }
     }
 }

@@ -84,8 +84,9 @@ All commands default to private `.notez/`. Add `-p` for public `notez/`, or `-g`
 | `notez add [title]` | Create a private note, open in editor |
 | `notez add -p [title]` | Create a public note |
 | `notez add [title] "body text"` | Create a note with content (no editor) |
-| `notez add [title] --in` | Create a note in a subdirectory (fzf picker) |
-| `notez edit [term]` | Open an existing note (fuzzy search / fzf picker) |
+| `notez add [title] --in` | Pick a subdirectory under `~/notez/` (fzf, globe/lock icons) |
+| `notez add [title] --in --in-local` | Pick a subdirectory under the local `.notez/` instead |
+| `notez edit [term]` | Open an existing note — fuzzy across **all** notes (global + mirrored local) |
 
 Multi-word titles work without quotes: `notez add my cool idea`
 
@@ -104,7 +105,8 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | `notez -p tree` | Public notes only |
 | `notez -g tree` | All projects (private + public, with scope icons) |
 | `notez` | Browse notes in yazi |
-| `notez search <term>` | Search note content (rg + fzf) |
+| `notez nav` / `notez -n` | Pick a global subdirectory (globe/lock icons), open in yazi |
+| `notez search <term>` | Search note content across **all** notes (rg + fzf) |
 | `notez mkdir <name>` | Create a numbered subdirectory |
 
 **Tree keybindings:**
