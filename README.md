@@ -10,9 +10,9 @@
 ![Tree](https://img.shields.io/badge/tree-preview%20·%20tags%20·%20search%20·%20focus-cba6f7)
 ![Optional](https://img.shields.io/badge/optional-yazi%20·%20fzf%20·%20rg-7f849c)
 
-A local-first CLI note-taking tool. Notes live with your projects, mirrored to a home directory for a unified view. Comes with [**todoz**](#todoz) — a full interactive todo manager.
+A local-first CLI note-taking tool. Notes live with your projects, mirrored to a home directory for a unified view. Comes with [**todoz**](#todoz), a full interactive todo manager.
 
-![notez tree — local project view](pictures/notez-local.png)
+![notez tree, local project view](pictures/notez-local.png)
 
 ## Install
 
@@ -22,7 +22,7 @@ cd notez-cli
 ./install.sh
 ```
 
-Requires the Rust toolchain (`cargo`). Optional tools detected during setup: `yazi`, `fzf`, `rg` — built-in fallbacks if missing.
+Requires the Rust toolchain (`cargo`). Optional tools detected during setup: `yazi`, `fzf`, `rg` (built-in fallbacks if missing).
 
 ## Setup
 
@@ -36,7 +36,7 @@ A friendly step-by-step wizard that configures your home notes folder, directory
 
 **Private by default:** All commands write to `.notez/` (hidden, auto-gitignored). Your notes stay private and never get committed to the project repo.
 
-**Public with `-p`:** Add `-p` to any command to write to `notez/` instead — these notes travel with the project and can be committed.
+**Public with `-p`:** Add `-p` to any command to write to `notez/` instead. These notes travel with the project and can be committed.
 
 **Home mirror:** Private notes are symlinked into `~/notez/` under a project directory (auto-created, named after your git repo). Push `~/notez/` as a private repo to sync notes across machines.
 
@@ -86,7 +86,7 @@ All commands default to private `.notez/`. Add `-p` for public `notez/`, or `-g`
 | `notez add [title] "body text"` | Create a note with content (no editor) |
 | `notez add [title] --in` | Pick a subdirectory under `~/notez/` (fzf, globe/lock icons) |
 | `notez add [title] --in --in-local` | Pick a subdirectory under the local `.notez/` instead |
-| `notez edit [term]` | Open an existing note — fuzzy across **all** notes (global + mirrored local) |
+| `notez edit [term]` | Open an existing note (fuzzy across **all** notes, global + mirrored local) |
 
 Multi-word titles work without quotes: `notez add my cool idea`
 
@@ -115,8 +115,8 @@ Multi-word titles work without quotes: `notez add my cool idea`
 |---|---|
 | `o` / `Enter` | Open file in editor / toggle directory |
 | `h` / `l` | Collapse / expand directory |
-| `t` | Tags — press `1`-`5` to toggle colored flags |
-| `f` | Focus directory (toggle — collapses all others) |
+| `t` | Tags: press `1`-`5` to toggle colored flags |
+| `f` | Focus directory (toggle, collapses all others) |
 | `/` | Search / filter (shown in title bar) |
 | `v` | Toggle view all / collapse all |
 | `J` / `K` | Scroll preview pane |
@@ -126,9 +126,9 @@ Multi-word titles work without quotes: `notez add my cool idea`
 
 **Preview pane:** Shows file content with markdown highlighting, or directory listing. Resolved file path shown at the bottom. Tags shown in the preview title.
 
-**Tags:** Same system as todoz — 5 colored dot flags, persisted in `.tags` files. Directory nodes aggregate tags from their children.
+**Tags:** Same system as todoz: 5 colored dot flags, persisted in `.tags` files. Directory nodes aggregate tags from their children.
 
-![notez tree — global view across all projects](pictures/notez-global.png)
+![notez tree, global view across all projects](pictures/notez-global.png)
 
 ---
 
@@ -143,7 +143,7 @@ A full interactive todo manager, installed as a standalone command alongside not
 | `todoz "item"` | Quick-add a private todo |
 | `todoz -g` | All todos across every project (private + public) |
 
-![todoz — local project todos with subtasks](pictures/todoz-local.png)
+![todoz, local project todos with subtasks](pictures/todoz-local.png)
 
 **Keybindings:**
 
@@ -156,9 +156,9 @@ A full interactive todo manager, installed as a standalone command alongside not
 | `s` | Add subtask (two levels deep) |
 | `e` | Edit text (←/→ to move cursor) |
 | `d` | Delete (y/n confirm) |
-| `t` | Tag mode — `1`-`5` toggle, `t` again to close (multi-tag friendly) |
-| `f` | Focus section (toggle — collapses all others) |
-| `/` | Filter — fuzzy text + `#tagname` (or click strip dots) |
+| `t` | Tag mode: `1`-`5` toggle, `t` again to close (multi-tag friendly) |
+| `f` | Focus section (toggle, collapses all others) |
+| `/` | Filter: fuzzy text + `#tagname` (or click strip dots) |
 | `J` / `K` | Move todo down / up (block-aware: subtree moves with parent) |
 | `h` / `l` | Collapse / expand (subtasks + project sections) |
 | `v` | Toggle view all / collapse all |
@@ -180,29 +180,29 @@ A full interactive todo manager, installed as a standalone command alongside not
 
 **Todo states:** `[ ]` unchecked → `[/]` almost done → `[x]` checked
 
-**Subtasks:** Two levels deep — press `s` on any todo or subtask to nest under it. Parent state auto-derived from child completion.
+**Subtasks:** Two levels deep. Press `s` on any todo or subtask to nest under it. Parent state auto-derived from child completion.
 
-**Tags:** 5 colored flags (●) shown to the left of each todo: important (red), priority (orange), long-term (yellow), idea (blue), blocked (purple). Toggle by clicking the dot, or press `t` to enter tag mode and use `1`-`5`. Tag mode stays open across navigation so you can tag multiple tasks in one go — press `t` again (or `Esc`) to close. Tags stack and are persisted as `#important #prio #longterm #idea #blocked` in the markdown. Section headers and parent tasks aggregate tags from their children.
+**Tags:** 5 colored flags (●) shown to the left of each todo: important (red), priority (orange), long-term (yellow), idea (blue), blocked (purple). Toggle by clicking the dot, or press `t` to enter tag mode and use `1`-`5`. Tag mode stays open across navigation so you can tag multiple tasks in one go. Press `t` again (or `Esc`) to close. Tags stack and are persisted as `#important #prio #longterm #idea #blocked` in the markdown. Section headers and parent tasks aggregate tags from their children.
 
-**Categories (`-g`):** Top-level groups under `~/notez/_todos/<name>/TODO.md`. Press `N` in global view to create a new one — alphabetically sorted alongside the rest.
+**Categories (`-g`):** Top-level groups under `~/notez/_todos/<name>/TODO.md`. Press `N` in global view to create a new one. They sort alphabetically alongside the rest.
 
-**Focus mode:** Press `f` to focus the current section — all others collapse. Navigate between sections and focus auto-follows. Press `f` again to restore the previous view.
+**Focus mode:** Press `f` to focus the current section. All others collapse. Navigate between sections and focus auto-follows. Press `f` again to restore the previous view.
 
-**Filter:** Press `/` (or click the search field) to start filtering. Text matches fuzzily; `#tagname` filters by tag with prefix support — `#imp` matches `#important`, `#i` matches `#important` and `#idea`, `#1`–`#5` reference tags by index, `#13` = tag 1 ∪ tag 3, `#` alone matches anything tagged. Multiple tokens combine with AND across, OR within. Click the dim dots next to the search field to toggle tags directly. `Enter` keeps the filter active, `Esc` clears it. Filter auto-expands matching sections so results are immediately visible.
+**Filter:** Press `/` (or click the search field) to start filtering. Text matches fuzzily; `#tagname` filters by tag with prefix support. `#imp` matches `#important`, `#i` matches `#important` and `#idea`, `#1`–`#5` reference tags by index, `#13` = tag 1 ∪ tag 3, `#` alone matches anything tagged. Multiple tokens combine with AND across, OR within. Click the dim dots next to the search field to toggle tags directly. `Enter` keeps the filter active, `Esc` clears it. Filter auto-expands matching sections so results are immediately visible.
 
 **Reorder:** `J`/`K` (shift) moves a todo up or down within its section, taking subtasks with it. Mouse: click + drag a row to reorder.
 
-**Code TODOs:** Automatically scans project source for `// TODO`, `# TODO`, `-- TODO`, `/* TODO`, `<!-- TODO` comments. Displayed as a read-only section with file path and line number — visible alongside your todos but non-interactive.
+**Code TODOs:** Automatically scans project source for `// TODO`, `# TODO`, `-- TODO`, `/* TODO`, `<!-- TODO` comments. Displayed as a read-only section with file path and line number, visible alongside your todos but non-interactive.
 
-**Global view (`todoz -g`):** Projects start collapsed — expand with `l`. Aggregates private + public todos from all projects, each with a lock/globe indicator.
+**Global view (`todoz -g`):** Projects start collapsed. Expand with `l`. Aggregates private + public todos from all projects, each with a lock/globe indicator.
 
-![todoz -g — global view with all projects and subtasks](pictures/todoz-global.png)
+![todoz -g, global view with all projects and subtasks](pictures/todoz-global.png)
 
 ---
 
 ## Standalone Commands
 
-Installed automatically as symlinks — no aliases needed.
+Installed automatically as symlinks, no aliases needed.
 
 **Naming convention:** `z<verb>` for write/append commands (act on data), `<noun>z` for view/manage TUIs (open something). The brand `notez` is itself the noun-z form.
 
@@ -265,4 +265,4 @@ Stored at `~/.config/notez/config`. Project mappings at `~/.config/notez/project
 
 ## Also
 
-Check out [repoz](https://github.com/Gaurgle/repoz) — see which repos need pulling, pushing, or have uncommitted work. One command.
+Check out [repoz](https://github.com/Gaurgle/repoz): see which repos need pulling, pushing, or have uncommitted work. One command.
