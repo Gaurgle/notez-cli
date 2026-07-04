@@ -8,5 +8,6 @@ pub mod log;
 pub mod mkdir;
 pub mod nav;
 pub mod search;
+pub mod sync;
 pub mod todo;
 pub mod tree;

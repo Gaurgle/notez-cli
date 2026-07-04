@@ -7,7 +7,9 @@ pub fn run_browse(global: bool, public: bool) {
     let config = Config::require();
     let dir = project::resolve_notez_dir(&config, global, public);
 
-    if !global && !public {
+    if global {
+        crate::commands::sync::reconcile(&config);
+    } else if !public {
         project::ensure_gitignore();
     }
 

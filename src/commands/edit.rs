@@ -10,12 +10,13 @@ pub fn run_edit(global: bool, public: bool, term: Option<String>) {
     let config = Config::require();
     let root = project::resolve_notez_dir(&config, global, public);
 
+    if global {
+        crate::commands::sync::reconcile(&config);
+    }
+
     if !root.exists() {
         let colors = Colors::new();
-        eprintln!(
-            "  {} No notez directory here.",
-            colors.peach.apply_to("✗")
-        );
+        eprintln!("  {} No notez directory here.", colors.peach.apply_to("✗"));
         std::process::exit(1);
     }
 
@@ -60,7 +61,9 @@ fn scan_notes(root: &Path) -> Vec<PathBuf> {
 }
 
 fn scan_notes_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -90,7 +93,12 @@ fn pick_file(config: &Config, files: &[PathBuf], root: &Path) -> PathBuf {
     if config.has_fzf {
         let input: String = files
             .iter()
-            .map(|f| f.strip_prefix(root).unwrap_or(f).to_string_lossy().to_string())
+            .map(|f| {
+                f.strip_prefix(root)
+                    .unwrap_or(f)
+                    .to_string_lossy()
+                    .to_string()
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -118,7 +126,12 @@ fn pick_file(config: &Config, files: &[PathBuf], root: &Path) -> PathBuf {
     } else {
         let items: Vec<String> = files
             .iter()
-            .map(|f| f.strip_prefix(root).unwrap_or(f).to_string_lossy().to_string())
+            .map(|f| {
+                f.strip_prefix(root)
+                    .unwrap_or(f)
+                    .to_string_lossy()
+                    .to_string()
+            })
             .collect();
         let selection = dialoguer::Select::new()
             .with_prompt("Select note")
@@ -159,7 +172,12 @@ mod tests {
         let files = scan_notes(dir.path());
         let matches = fuzzy_filter(&files, "api");
         assert_eq!(matches.len(), 1);
-        assert!(matches[0].file_name().unwrap().to_str().unwrap().contains("api"));
+        assert!(matches[0]
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("api"));
     }
 
     #[test]

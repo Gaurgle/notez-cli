@@ -95,69 +95,74 @@ pub fn ensure_gitignore() {
     }
 
     use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&gitignore) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&gitignore)
+    {
         writeln!(f, "{}", entry).ok();
     }
 }
 
 /// Nerdfont icons for private/public.
-pub const ICON_PRIVATE: &str = "\u{f023}";  // lock
-pub const ICON_PUBLIC: &str = "\u{f0ac}";   // globe
+pub const ICON_PRIVATE: &str = "\u{f023}"; // lock
+pub const ICON_PUBLIC: &str = "\u{f0ac}"; // globe
 
 /// Ensure the project has a numbered directory in the home notez root.
 /// Returns the path to the project's home dir (e.g., ~/notez/02_my-project/).
 pub fn ensure_home_project_dir(config: &Config) -> PathBuf {
     let cwd = std::env::current_dir().expect("failed to get current directory");
     let project_name = detect_project_name(&cwd);
+    let project_home_dir = ensure_home_dir_for(&config.root_path(), &project_name);
 
     let mut mapping = ProjectMapping::load();
-    let home_root = config.root_path();
-
-    // Check if this project already has a home dir
-    if mapping.get_path(&project_name).is_some() {
-        let dirs = numbering::scan_numbered_dirs(&home_root);
-        if let Some(dir) = dirs.iter().find(|d| d.name == project_name) {
-            return home_root.join(&dir.full_name);
-        }
+    if mapping.get_path(&project_name).is_none() {
+        mapping.add(&project_name, &cwd.to_string_lossy());
+        mapping.save().expect("failed to save project mapping");
     }
-
-    // Allocate a new numbered dir
-    let number = numbering::next_available_number(&home_root)
-        .expect("all 100 directory slots are taken");
-    let dir_name = format!("{:02}_{}", number, project_name);
-    let project_home_dir = home_root.join(&dir_name);
-    fs::create_dir_all(&project_home_dir).expect("failed to create project home dir");
-
-    mapping.add(&project_name, &cwd.to_string_lossy());
-    mapping.save().expect("failed to save project mapping");
 
     project_home_dir
 }
 
-/// Create a symlink for a file in the home project directory.
-pub fn mirror_file_to_home(source: &Path, home_project_dir: &Path) {
-    let file_name = source.file_name().expect("no file name");
-    let link = home_project_dir.join(file_name);
-
-    if link.exists() || link.is_symlink() {
-        return;
+/// Find or create the numbered home dir for a project name, without
+/// touching the project mapping. Usable outside the project's cwd (sync).
+pub fn ensure_home_dir_for(home_root: &Path, project_name: &str) -> PathBuf {
+    let dirs = numbering::scan_numbered_dirs(home_root);
+    if let Some(dir) = dirs.iter().find(|d| d.name == project_name) {
+        return home_root.join(&dir.full_name);
     }
 
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(source, &link).ok();
+    let number =
+        numbering::next_available_number(home_root).expect("all 100 directory slots are taken");
+    let dir_name = format!("{:02}_{}", number, project_name);
+    let project_home_dir = home_root.join(&dir_name);
+    fs::create_dir_all(&project_home_dir).expect("failed to create project home dir");
+    project_home_dir
+}
+
+/// Create a symlink for a file in the home project directory.
+/// Returns true if a new link was created.
+pub fn mirror_file_to_home(source: &Path, home_project_dir: &Path) -> bool {
+    let file_name = source.file_name().expect("no file name");
+    mirror_to_home(source, &home_project_dir.join(file_name))
 }
 
 /// Create a symlink for a directory in the home project directory.
-pub fn mirror_dir_to_home(source_dir: &Path, home_project_dir: &Path) {
+/// Returns true if a new link was created.
+pub fn mirror_dir_to_home(source_dir: &Path, home_project_dir: &Path) -> bool {
     let dir_name = source_dir.file_name().expect("no dir name");
-    let link = home_project_dir.join(dir_name);
+    mirror_to_home(source_dir, &home_project_dir.join(dir_name))
+}
 
+fn mirror_to_home(source: &Path, link: &Path) -> bool {
     if link.exists() || link.is_symlink() {
-        return;
+        return false;
     }
 
     #[cfg(unix)]
-    std::os::unix::fs::symlink(source_dir, &link).ok();
+    return std::os::unix::fs::symlink(source, link).is_ok();
+    #[cfg(not(unix))]
+    false
 }
 
 // --- Project Mapping ---
@@ -196,10 +201,9 @@ impl ProjectMapping {
                     continue;
                 }
                 if let Some((name, path)) = line.split_once('=') {
-                    mapping.projects.insert(
-                        name.trim().to_string(),
-                        path.trim().to_string(),
-                    );
+                    mapping
+                        .projects
+                        .insert(name.trim().to_string(), path.trim().to_string());
                 }
             }
         }
@@ -281,7 +285,10 @@ mod tests {
         mapping.save_to(&path).unwrap();
 
         let loaded = ProjectMapping::load_from(&path);
-        assert_eq!(loaded.get_path("my-project"), Some("/home/user/repos/my-project".to_string()));
+        assert_eq!(
+            loaded.get_path("my-project"),
+            Some("/home/user/repos/my-project".to_string())
+        );
     }
 
     #[test]

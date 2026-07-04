@@ -9,7 +9,12 @@ mod setup;
 mod tui;
 
 #[derive(Parser)]
-#[command(name = "notez", about = "A CLI note-taking tool", version, disable_help_flag = true)]
+#[command(
+    name = "notez",
+    about = "A CLI note-taking tool",
+    version,
+    disable_help_flag = true
+)]
 pub struct Cli {
     /// Show help
     #[arg(short = 'h', long = "help", global = true)]
@@ -65,6 +70,8 @@ enum Commands {
     },
     /// Show directory tree
     Tree,
+    /// Mirror out-of-band local notes into ~/notez/ and prune dead links
+    Sync,
     /// Run the setup wizard
     Setup,
     /// Create a demo project for screenshots
@@ -183,10 +190,22 @@ fn print_help() {
 
     println!("  {}", c.mauve.apply_to("Notes"));
     cmd("notez add [title]", "create a note, open in editor");
-    cmd("notez add [title] \"body\"", "create with content, no editor");
-    cmd("notez add [title] --in", "pick a global subdirectory (picker)");
-    cmd("notez add [title] --in --in-local", "pick a local subdirectory instead");
-    cmd("notez edit [term]", "open an existing note (fuzzy across all)");
+    cmd(
+        "notez add [title] \"body\"",
+        "create with content, no editor",
+    );
+    cmd(
+        "notez add [title] --in",
+        "pick a global subdirectory (picker)",
+    );
+    cmd(
+        "notez add [title] --in --in-local",
+        "pick a local subdirectory instead",
+    );
+    cmd(
+        "notez edit [term]",
+        "open an existing note (fuzzy across all)",
+    );
     println!();
 
     println!("  {}", c.mauve.apply_to("Daily Logs"));
@@ -201,10 +220,14 @@ fn print_help() {
 
     println!("  {}", c.mauve.apply_to("Browse & Organize"));
     cmd("notez", "browse notes in yazi");
-    cmd("notez nav  /  notez -n", "pick a global subdirectory, open in yazi");
+    cmd(
+        "notez nav  /  notez -n",
+        "pick a global subdirectory, open in yazi",
+    );
     cmd("notez tree", "interactive tree navigator");
     cmd("notez search <term>", "search note content (rg + fzf)");
     cmd("notez mkdir <name>", "create a numbered subdirectory");
+    cmd("notez sync", "relink out-of-band notes, prune dead links");
     println!();
 
     println!("  {}", c.mauve.apply_to("Standalone commands"));
@@ -225,7 +248,8 @@ fn print_help() {
     println!(
         "  {}    {}",
         c.sapphire.apply_to("-g"),
-        c.overlay.apply_to("use before subcommand for global ~/notez/")
+        c.overlay
+            .apply_to("use before subcommand for global ~/notez/")
     );
     println!(
         "  {}    {}",
@@ -249,7 +273,12 @@ fn print_help() {
 
     let key = |k: &str, ks: &console::Style, desc: &str| {
         let pad = 5usize.saturating_sub(k.len());
-        println!("    {}{}  {}", ks.apply_to(k), " ".repeat(pad), c.overlay.apply_to(desc));
+        println!(
+            "    {}{}  {}",
+            ks.apply_to(k),
+            " ".repeat(pad),
+            c.overlay.apply_to(desc)
+        );
     };
 
     println!("  {}", c.mauve.apply_to("Todo keys"));
@@ -307,18 +336,34 @@ fn main() {
         }
 
         match cli.command {
-            Some(Commands::Todoz { item }) => commands::todo::run_todo(cli.global, cli.public, item),
+            Some(Commands::Todoz { item }) => {
+                commands::todo::run_todo(cli.global, cli.public, item)
+            }
             Some(Commands::Todo { item }) => commands::todo::run_todo(cli.global, cli.public, item),
-            Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
-            Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
-            Some(Commands::Znote { title, r#in, in_local }) => {
+            Some(Commands::Zlog { message }) => {
+                commands::log::run_log(cli.global, cli.public, message)
+            }
+            Some(Commands::Logz) | Some(Commands::Logs) => {
+                commands::browse::run_logz(cli.global, cli.public)
+            }
+            Some(Commands::Znote {
+                title,
+                r#in,
+                in_local,
+            }) => {
                 let (t, body) = split_title_body(title);
                 commands::add::run_add(cli.global, cli.public, t, r#in, in_local, body)
             }
-            Some(Commands::Treez) | Some(Commands::Tree) => commands::tree::run_tree(cli.global, cli.public),
+            Some(Commands::Treez) | Some(Commands::Tree) => {
+                commands::tree::run_tree(cli.global, cli.public)
+            }
             // edit/search default to global so all notes are searchable; -g remains a no-op for symmetry.
-            Some(Commands::Editz { term }) | Some(Commands::Edit { term }) => commands::edit::run_edit(true, cli.public, term),
-            Some(Commands::Findz { term }) | Some(Commands::Search { term }) => commands::search::run_search(true, cli.public, term),
+            Some(Commands::Editz { term }) | Some(Commands::Edit { term }) => {
+                commands::edit::run_edit(true, cli.public, term)
+            }
+            Some(Commands::Findz { term }) | Some(Commands::Search { term }) => {
+                commands::search::run_search(true, cli.public, term)
+            }
             Some(Commands::Nav) => commands::nav::run_nav(),
             _ => {
                 print_help();
@@ -341,16 +386,23 @@ fn main() {
 
     match cli.command {
         None => commands::browse::run_browse(cli.global, cli.public),
-        Some(Commands::Add { title, r#in, in_local }) => {
+        Some(Commands::Add {
+            title,
+            r#in,
+            in_local,
+        }) => {
             let (t, body) = split_title_body(title);
             commands::add::run_add(cli.global, cli.public, t, r#in, in_local, body)
         }
         Some(Commands::Log { message }) => commands::log::run_log(cli.global, cli.public, message),
-        Some(Commands::Logz) | Some(Commands::Logs) => commands::browse::run_logz(cli.global, cli.public),
+        Some(Commands::Logz) | Some(Commands::Logs) => {
+            commands::browse::run_logz(cli.global, cli.public)
+        }
         Some(Commands::Mkdir { name }) => commands::mkdir::run_mkdir(cli.global, cli.public, name),
         // search defaults to global so the whole notez tree is searchable; -g remains a no-op for symmetry.
         Some(Commands::Search { term }) => commands::search::run_search(true, cli.public, term),
         Some(Commands::Tree) => commands::tree::run_tree(cli.global, cli.public),
+        Some(Commands::Sync) => commands::sync::run_sync(),
         Some(Commands::Setup) => setup::run_setup(),
         Some(Commands::Demo { view }) => commands::demo::run_demo(view),
         Some(Commands::Zlog { message }) => commands::log::run_log(cli.global, cli.public, message),
@@ -364,7 +416,11 @@ fn main() {
         Some(Commands::Todoz { item }) => commands::todo::run_todo(cli.global, cli.public, item),
         Some(Commands::Edit { term }) => commands::edit::run_edit(true, cli.public, term),
         Some(Commands::Nav) => commands::nav::run_nav(),
-        Some(Commands::Znote { title, r#in, in_local }) => {
+        Some(Commands::Znote {
+            title,
+            r#in,
+            in_local,
+        }) => {
             let (t, body) = split_title_body(title);
             commands::add::run_add(cli.global, cli.public, t, r#in, in_local, body)
         }

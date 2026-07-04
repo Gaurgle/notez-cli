@@ -9,6 +9,10 @@ pub fn run_search(global: bool, public: bool, term: String) {
     let root = project::resolve_notez_dir(&config, global, public);
     let colors = Colors::new();
 
+    if global {
+        crate::commands::sync::reconcile(&config);
+    }
+
     if config.has_rg && config.has_fzf {
         // rg | fzf with bat preview
         let rg = Command::new("rg")

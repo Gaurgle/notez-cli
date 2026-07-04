@@ -14,40 +14,42 @@ use crate::tui::{self, theme, VimCommandMode};
 
 #[derive(Debug, Clone, PartialEq)]
 enum CheckState {
-    Unchecked,  // [ ]
-    Half,       // [/]
-    Checked,    // [x]
+    Unchecked, // [ ]
+    Half,      // [/]
+    Checked,   // [x]
 }
 
 // Flag bitfield constants
 pub const FLAG_IMPORTANT: u8 = 1 << 0;
-pub const FLAG_PRIO: u8     = 1 << 1;
-pub const FLAG_LONGTERM: u8  = 1 << 2;
-pub const FLAG_IDEA: u8      = 1 << 3;
-pub const FLAG_BLOCKED: u8   = 1 << 4;
+pub const FLAG_PRIO: u8 = 1 << 1;
+pub const FLAG_LONGTERM: u8 = 1 << 2;
+pub const FLAG_IDEA: u8 = 1 << 3;
+pub const FLAG_BLOCKED: u8 = 1 << 4;
 
 pub const FLAG_COLORS: [Color; 5] = [
-    Color::Rgb(243, 139, 168),  // red
-    Color::Rgb(250, 179, 135),  // orange/peach
-    Color::Rgb(249, 226, 175),  // yellow
-    Color::Rgb(116, 199, 236),  // blue
-    Color::Rgb(203, 166, 247),  // purple
+    Color::Rgb(243, 139, 168), // red
+    Color::Rgb(250, 179, 135), // orange/peach
+    Color::Rgb(249, 226, 175), // yellow
+    Color::Rgb(116, 199, 236), // blue
+    Color::Rgb(203, 166, 247), // purple
 ];
 
 pub const FLAG_SHAPES: [&str; 5] = ["●", "●", "●", "●", "●"];
 
 pub const FLAG_DEFS: [(u8, &str, &str, &str); 5] = [
     (FLAG_IMPORTANT, "important", "●", "important"),
-    (FLAG_PRIO,      "prio",     "●", "priority"),
-    (FLAG_LONGTERM,  "longterm",  "●", "long-term"),
-    (FLAG_IDEA,      "idea",     "●", "idea"),
-    (FLAG_BLOCKED,   "blocked",  "●", "blocked"),
+    (FLAG_PRIO, "prio", "●", "priority"),
+    (FLAG_LONGTERM, "longterm", "●", "long-term"),
+    (FLAG_IDEA, "idea", "●", "idea"),
+    (FLAG_BLOCKED, "blocked", "●", "blocked"),
 ];
 
 /// Move a byte cursor left by one char in `s`. Always lands on a UTF-8 boundary,
 /// so callers can safely pass the result to `split_at` / `insert` / `remove`.
 pub fn prev_char_boundary(s: &str, pos: usize) -> usize {
-    if pos == 0 { return 0; }
+    if pos == 0 {
+        return 0;
+    }
     let mut i = pos - 1;
     while i > 0 && !s.is_char_boundary(i) {
         i -= 1;
@@ -58,7 +60,9 @@ pub fn prev_char_boundary(s: &str, pos: usize) -> usize {
 /// Move a byte cursor right by one char in `s`. Always lands on a UTF-8 boundary.
 pub fn next_char_boundary(s: &str, pos: usize) -> usize {
     let len = s.len();
-    if pos >= len { return len; }
+    if pos >= len {
+        return len;
+    }
     let mut i = pos + 1;
     while i < len && !s.is_char_boundary(i) {
         i += 1;
@@ -92,20 +96,34 @@ fn serialize_flags(flags: u8) -> String {
 /// Render fixed-position flag slots (5 chars). Active flags show their shape, inactive show "·".
 /// When `hover_dot` is `Some(i)`, an unset slot at index `i` previews the tag in its color (dim).
 pub fn flags_slots_with_hover(flags: u8, hover_dot: Option<u8>) -> Vec<Span<'static>> {
-    let bits = [FLAG_IMPORTANT, FLAG_PRIO, FLAG_LONGTERM, FLAG_IDEA, FLAG_BLOCKED];
+    let bits = [
+        FLAG_IMPORTANT,
+        FLAG_PRIO,
+        FLAG_LONGTERM,
+        FLAG_IDEA,
+        FLAG_BLOCKED,
+    ];
     let mut spans: Vec<Span<'static>> = vec![Span::raw(" ")];
     for (i, &bit) in bits.iter().enumerate() {
         let is_set = flags & bit != 0;
         let is_hovered = hover_dot == Some(i as u8);
         if is_set {
-            spans.push(Span::styled(FLAG_SHAPES[i].to_string(), Style::default().fg(FLAG_COLORS[i])));
+            spans.push(Span::styled(
+                FLAG_SHAPES[i].to_string(),
+                Style::default().fg(FLAG_COLORS[i]),
+            ));
         } else if is_hovered {
             spans.push(Span::styled(
                 FLAG_SHAPES[i].to_string(),
-                Style::default().fg(FLAG_COLORS[i]).add_modifier(ratatui::style::Modifier::DIM),
+                Style::default()
+                    .fg(FLAG_COLORS[i])
+                    .add_modifier(ratatui::style::Modifier::DIM),
             ));
         } else {
-            spans.push(Span::styled("·", Style::default().fg(Color::Rgb(50, 50, 65))));
+            spans.push(Span::styled(
+                "·",
+                Style::default().fg(Color::Rgb(50, 50, 65)),
+            ));
         }
     }
     spans.push(Span::raw(" "));
@@ -123,7 +141,9 @@ pub fn flags_slots(flags: u8) -> Vec<Span<'static>> {
 /// - `#name` → all tags whose name starts with `name` (case-insensitive prefix)
 /// - non-`#` words or unknown prefixes → 0
 pub fn match_tag_prefix(word: &str) -> u8 {
-    let Some(name) = word.strip_prefix('#') else { return 0; };
+    let Some(name) = word.strip_prefix('#') else {
+        return 0;
+    };
     if name.is_empty() {
         return FLAG_DEFS.iter().fold(0u8, |a, &(b, _, _, _)| a | b);
     }
@@ -186,13 +206,17 @@ pub fn parse_filter_sets(buffer: &str) -> (String, Vec<u8>) {
 /// Subsequence (fuzzy) match: every char of `query` appears in `text` in order,
 /// not necessarily contiguously. Case-insensitive, Unicode-aware.
 pub fn fuzzy_match(text: &str, query: &str) -> bool {
-    if query.is_empty() { return true; }
+    if query.is_empty() {
+        return true;
+    }
     let text_l = text.to_lowercase();
     let query_l = query.to_lowercase();
     let mut q_iter = query_l.chars().peekable();
     for c in text_l.chars() {
         match q_iter.peek() {
-            Some(&qc) if c == qc => { q_iter.next(); }
+            Some(&qc) if c == qc => {
+                q_iter.next();
+            }
             Some(_) => {}
             None => return true,
         }
@@ -243,7 +267,9 @@ fn compute_filter_keep(items: &[TodoItem], text_query: &str, tag_sets: &[u8]) ->
     }
     // Walk back from each match to mark all ancestors (parent todos + section header).
     for i in 0..n {
-        if !keep[i] { continue; }
+        if !keep[i] {
+            continue;
+        }
         let mut needed_depth = items[i].depth;
         let mut j = i;
         while j > 0 {
@@ -336,7 +362,7 @@ struct TodoItem {
     source: PathBuf,
     project: String,
     is_header: bool,
-    depth: u8,          // 0 = top-level, 1 = subtask, 2 = sub-subtask
+    depth: u8, // 0 = top-level, 1 = subtask, 2 = sub-subtask
     has_subtasks: bool,
     collapsed: bool,
     is_code_todo: bool,
@@ -388,7 +414,10 @@ fn serialize_todos_for_file(items: &[TodoItem], source: &Path) -> String {
         };
         let indent = "  ".repeat(item.depth as usize);
         let flag_tags = serialize_flags(item.flags);
-        out.push_str(&format!("{}- {} {}{}\n", indent, checkbox, item.text, flag_tags));
+        out.push_str(&format!(
+            "{}- {} {}{}\n",
+            indent, checkbox, item.text, flag_tags
+        ));
     }
     out
 }
@@ -404,7 +433,11 @@ fn load_single_todo(path: &Path, project_name: &str) -> Vec<TodoItem> {
     for (text, state, depth, flags) in parsed {
         if depth > 0 {
             // Mark the nearest shallower item as having subtasks
-            if let Some(parent) = items.iter_mut().rev().find(|i| !i.is_header && i.depth < depth) {
+            if let Some(parent) = items
+                .iter_mut()
+                .rev()
+                .find(|i| !i.is_header && i.depth < depth)
+            {
                 parent.has_subtasks = true;
             }
         }
@@ -443,15 +476,31 @@ fn block_end(items: &[TodoItem], idx: usize) -> usize {
 /// same depth, same section (no header between), same parent (no shallower item
 /// between). Headers and code-todos can never be dragged.
 fn can_drag(items: &[TodoItem], start: usize, target: usize) -> bool {
-    if start >= items.len() || target >= items.len() { return false; }
-    if items[start].is_header || items[target].is_header { return false; }
-    if items[start].is_code_todo || items[target].is_code_todo { return false; }
-    if items[start].depth != items[target].depth { return false; }
+    if start >= items.len() || target >= items.len() {
+        return false;
+    }
+    if items[start].is_header || items[target].is_header {
+        return false;
+    }
+    if items[start].is_code_todo || items[target].is_code_todo {
+        return false;
+    }
+    if items[start].depth != items[target].depth {
+        return false;
+    }
     let depth = items[start].depth;
-    let (lo, hi) = if start <= target { (start, target) } else { (target, start) };
+    let (lo, hi) = if start <= target {
+        (start, target)
+    } else {
+        (target, start)
+    };
     for i in lo..=hi {
-        if items[i].is_header { return false; }
-        if items[i].depth < depth { return false; }
+        if items[i].is_header {
+            return false;
+        }
+        if items[i].depth < depth {
+            return false;
+        }
     }
     true
 }
@@ -543,7 +592,9 @@ fn derive_header_flags(items: &mut Vec<TodoItem>) {
         }
         let mut agg: u8 = 0;
         for j in (i + 1)..len {
-            if items[j].is_header { break; }
+            if items[j].is_header {
+                break;
+            }
             agg |= items[j].flags;
         }
         items[i].flags = agg;
@@ -561,31 +612,44 @@ fn scan_code_todos() -> Vec<TodoItem> {
         .args([
             "--line-number",
             "--no-heading",
-            "--glob", "!.notez/**",
-            "--glob", "!notez/**",
-            "--glob", "!node_modules/**",
-            "--glob", "!target/**",
-            "--glob", "!.git/**",
-            "--glob", "!*.md",
+            "--glob",
+            "!.notez/**",
+            "--glob",
+            "!notez/**",
+            "--glob",
+            "!node_modules/**",
+            "--glob",
+            "!target/**",
+            "--glob",
+            "!.git/**",
+            "--glob",
+            "!*.md",
             r"(?://|#|--|/\*|<!--)\s*TODO\b",
         ])
         .current_dir(&cwd)
         .output();
 
     let lines = match output {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout).to_string()
-        }
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => {
             // Fallback to grep
             let o = std::process::Command::new("grep")
                 .args([
                     "-rn",
-                    "--include=*.rs", "--include=*.ts", "--include=*.js",
-                    "--include=*.py", "--include=*.go", "--include=*.java",
-                    "--include=*.kt", "--include=*.c", "--include=*.cpp",
-                    "--include=*.h", "--include=*.sh", "--include=*.toml",
-                    "--include=*.yaml", "--include=*.yml",
+                    "--include=*.rs",
+                    "--include=*.ts",
+                    "--include=*.js",
+                    "--include=*.py",
+                    "--include=*.go",
+                    "--include=*.java",
+                    "--include=*.kt",
+                    "--include=*.c",
+                    "--include=*.cpp",
+                    "--include=*.h",
+                    "--include=*.sh",
+                    "--include=*.toml",
+                    "--include=*.yaml",
+                    "--include=*.yml",
                     "TODO",
                 ])
                 .current_dir(&cwd)
@@ -693,7 +757,7 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
                 has_subtasks: false,
                 collapsed: false,
                 is_code_todo: false,
-            flags: 0,
+                flags: 0,
             });
             result.extend(private_items);
         }
@@ -709,7 +773,7 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
                 has_subtasks: false,
                 collapsed: false,
                 is_code_todo: false,
-            flags: 0,
+                flags: 0,
             });
             result.extend(public_items);
         }
@@ -726,7 +790,7 @@ fn load_local_todos(_config: &Config, public: bool) -> Vec<TodoItem> {
                 has_subtasks: false,
                 collapsed: false,
                 is_code_todo: false,
-            flags: 0,
+                flags: 0,
             });
         }
     }
@@ -764,10 +828,7 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         return all_items;
     };
 
-    let mut dirs: Vec<_> = entries
-        .flatten()
-        .filter(|e| e.path().is_dir())
-        .collect();
+    let mut dirs: Vec<_> = entries.flatten().filter(|e| e.path().is_dir()).collect();
     dirs.sort_by_key(|e| e.file_name());
 
     for entry in dirs {
@@ -775,7 +836,9 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         if !todo_path.exists() {
             continue;
         }
-        let canonical = todo_path.canonicalize().unwrap_or_else(|_| todo_path.clone());
+        let canonical = todo_path
+            .canonicalize()
+            .unwrap_or_else(|_| todo_path.clone());
         if seen_canonical.contains(&canonical) {
             continue;
         }
@@ -819,7 +882,9 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
             if !todo_path.exists() {
                 continue;
             }
-            let canonical = todo_path.canonicalize().unwrap_or_else(|_| todo_path.clone());
+            let canonical = todo_path
+                .canonicalize()
+                .unwrap_or_else(|_| todo_path.clone());
             if seen_canonical.contains(&canonical) {
                 continue;
             }
@@ -853,7 +918,9 @@ fn load_global_todos(config: &Config) -> Vec<TodoItem> {
         if !public_todo.exists() {
             continue;
         }
-        let canonical = public_todo.canonicalize().unwrap_or_else(|_| public_todo.clone());
+        let canonical = public_todo
+            .canonicalize()
+            .unwrap_or_else(|_| public_todo.clone());
         if seen_canonical.contains(&canonical) {
             continue;
         }
@@ -908,7 +975,10 @@ fn save_all_todos(items: &[TodoItem]) {
     for item in items {
         if !item.is_code_todo && !sources.contains(&item.source) {
             // Skip if another source path already resolves to the same physical file
-            let canonical = item.source.canonicalize().unwrap_or_else(|_| item.source.clone());
+            let canonical = item
+                .source
+                .canonicalize()
+                .unwrap_or_else(|_| item.source.clone());
             if seen_canonical.contains(&canonical) {
                 continue;
             }
@@ -930,7 +1000,9 @@ fn save_all_todos(items: &[TodoItem]) {
 pub fn run_todo(global: bool, public: bool, item: Option<String>) {
     let config = Config::require();
 
-    if !global && !public {
+    if global {
+        crate::commands::sync::reconcile(&config);
+    } else if !public {
         project::ensure_gitignore();
     }
 
@@ -955,7 +1027,7 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
                 has_subtasks: false,
                 collapsed: false,
                 is_code_todo: false,
-            flags: 0,
+                flags: 0,
             });
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).ok();
@@ -969,7 +1041,11 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
             }
 
             let colors = Colors::new();
-            let scope_icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
+            let scope_icon = if public {
+                project::ICON_PUBLIC
+            } else {
+                project::ICON_PRIVATE
+            };
             let real_count = items.iter().filter(|i| !i.is_header).count();
             println!(
                 "  {} {} added to TODO ({} items)",
@@ -980,14 +1056,30 @@ pub fn run_todo(global: bool, public: bool, item: Option<String>) {
         }
         None => {
             let (items, tui_title, tui_path) = if global {
-                let path = config.notez_root.replacen(&dirs::home_dir().unwrap().to_string_lossy().to_string(), "~", 1);
-                (load_global_todos(&config), "todoz (global)".to_string(), path)
+                let path = config.notez_root.replacen(
+                    &dirs::home_dir().unwrap().to_string_lossy().to_string(),
+                    "~",
+                    1,
+                );
+                (
+                    load_global_todos(&config),
+                    "todoz (global)".to_string(),
+                    path,
+                )
             } else {
                 let cwd = std::env::current_dir().unwrap_or_default();
                 let name = project::detect_project_name(&cwd);
-                let icon = if public { project::ICON_PUBLIC } else { project::ICON_PRIVATE };
+                let icon = if public {
+                    project::ICON_PUBLIC
+                } else {
+                    project::ICON_PRIVATE
+                };
                 let dir_name = if public { "./notez" } else { "./.notez" };
-                (load_local_todos(&config, public), format!("{} todoz ({})", icon, name), dir_name.to_string())
+                (
+                    load_local_todos(&config, public),
+                    format!("{} todoz ({})", icon, name),
+                    dir_name.to_string(),
+                )
             };
             let updated = run_todo_tui(items, global, &tui_title, &tui_path, &config);
             if global {
@@ -1052,7 +1144,13 @@ fn get_visible_indices(items: &[TodoItem]) -> Vec<usize> {
     visible
 }
 
-fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_path: &str, config: &Config) -> Vec<TodoItem> {
+fn run_todo_tui(
+    mut items: Vec<TodoItem>,
+    global: bool,
+    tui_title: &str,
+    tui_path: &str,
+    config: &Config,
+) -> Vec<TodoItem> {
     let mut terminal = tui::enter().expect("failed to enter TUI");
     let mut state = ListState::default();
     if !items.is_empty() {
@@ -1081,8 +1179,8 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
     // headers and subtask-having parents.
     let mut drag_candidate: Option<usize> = None;
     let mut drag_active: bool = false;
-    let mut drag_start: Option<usize> = None;       // visual highlight during drag
-    let mut drag_target: Option<usize> = None;      // visual highlight of drop target
+    let mut drag_start: Option<usize> = None; // visual highlight during drag
+    let mut drag_target: Option<usize> = None; // visual highlight of drop target
     let mut list_area: Rect = Rect::default();
     let mut filter_strip_area: Rect = Rect::default();
     let mut visible_for_mouse: Vec<usize> = Vec::new();
@@ -1143,41 +1241,67 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                     .map(|&idx| {
                         let item = &items[idx];
                         if item.is_header {
-                            let real_path = fs::canonicalize(&item.source).unwrap_or(item.source.clone());
-                            let path_display = real_path.parent()
+                            let real_path =
+                                fs::canonicalize(&item.source).unwrap_or(item.source.clone());
+                            let path_display = real_path
+                                .parent()
                                 .map(|p| {
                                     let s = p.to_string_lossy().to_string();
-                                    let home = dirs::home_dir().unwrap().to_string_lossy().to_string();
+                                    let home =
+                                        dirs::home_dir().unwrap().to_string_lossy().to_string();
                                     s.replacen(&home, "~", 1)
                                 })
                                 .unwrap_or_default();
-                            let header_color = if item.is_code_todo { theme::YELLOW } else { theme::MAUVE };
+                            let header_color = if item.is_code_todo {
+                                theme::YELLOW
+                            } else {
+                                theme::MAUVE
+                            };
                             let collapse_icon = if item.collapsed { "▶ " } else { "▼ " };
                             let mut header_spans = Vec::new();
                             header_spans.extend(flags_slots(item.flags));
-                            header_spans.push(Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)));
+                            header_spans.push(Span::styled(
+                                collapse_icon,
+                                Style::default().fg(theme::SURFACE),
+                            ));
                             // Split scope icon from project name
                             let header_text = &item.text;
-                            if let Some(rest) = header_text.strip_prefix(project::ICON_PRIVATE).or_else(|| header_text.strip_prefix(project::ICON_PUBLIC)) {
+                            if let Some(rest) = header_text
+                                .strip_prefix(project::ICON_PRIVATE)
+                                .or_else(|| header_text.strip_prefix(project::ICON_PUBLIC))
+                            {
                                 let icon = &header_text[..header_text.len() - rest.len()];
-                                header_spans.push(Span::styled(format!("{} ", icon), Style::default().fg(theme::OVERLAY)));
+                                header_spans.push(Span::styled(
+                                    format!("{} ", icon),
+                                    Style::default().fg(theme::OVERLAY),
+                                ));
                                 header_spans.push(Span::styled(
                                     format!("{} ", rest.trim_start()),
-                                    Style::default().fg(header_color).add_modifier(ratatui::style::Modifier::BOLD),
+                                    Style::default()
+                                        .fg(header_color)
+                                        .add_modifier(ratatui::style::Modifier::BOLD),
                                 ));
                             } else {
                                 header_spans.push(Span::styled(
                                     format!("{} ", header_text),
-                                    Style::default().fg(header_color).add_modifier(ratatui::style::Modifier::BOLD),
+                                    Style::default()
+                                        .fg(header_color)
+                                        .add_modifier(ratatui::style::Modifier::BOLD),
                                 ));
                             }
-                            header_spans.push(Span::styled(path_display, Style::default().fg(theme::OVERLAY)));
+                            header_spans.push(Span::styled(
+                                path_display,
+                                Style::default().fg(theme::OVERLAY),
+                            ));
                             ListItem::new(Line::from(header_spans))
                         } else if item.is_code_todo {
                             let mut spans = Vec::new();
                             spans.extend(flags_slots(0));
                             spans.push(Span::styled("   ", Style::default()));
-                            spans.push(Span::styled(item.text.clone(), Style::default().fg(theme::OVERLAY)));
+                            spans.push(Span::styled(
+                                item.text.clone(),
+                                Style::default().fg(theme::OVERLAY),
+                            ));
                             ListItem::new(Line::from(spans))
                         } else {
                             let (indent, collapse_icon) = if item.has_subtasks {
@@ -1235,7 +1359,10 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                                         .map(|(i, _)| i)
                                         .unwrap_or(remaining.len());
                                     let split_at = if split_at < remaining.len() {
-                                        remaining[..split_at].rfind(' ').map(|i| i + 1).unwrap_or(split_at)
+                                        remaining[..split_at]
+                                            .rfind(' ')
+                                            .map(|i| i + 1)
+                                            .unwrap_or(split_at)
                                     } else {
                                         split_at
                                     };
@@ -1243,11 +1370,20 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                                     let rest = rest.trim_start();
 
                                     if first {
-                                        let hover_dot = hover_flag.and_then(|(hi, d)| if hi == idx { Some(d) } else { None });
+                                        let hover_dot = hover_flag.and_then(|(hi, d)| {
+                                            if hi == idx {
+                                                Some(d)
+                                            } else {
+                                                None
+                                            }
+                                        });
                                         let mut spans = Vec::new();
                                         spans.extend(flags_slots_with_hover(item.flags, hover_dot));
                                         spans.push(Span::styled(indent.clone(), Style::default()));
-                                        spans.push(Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)));
+                                        spans.push(Span::styled(
+                                            collapse_icon,
+                                            Style::default().fg(theme::SURFACE),
+                                        ));
                                         spans.extend(checkbox_spans.clone());
                                         spans.push(Span::styled(chunk.to_string(), style));
                                         lines.push(Line::from(spans));
@@ -1263,11 +1399,16 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                                 }
                                 ListItem::new(lines)
                             } else {
-                                let hover_dot = hover_flag.and_then(|(hi, d)| if hi == idx { Some(d) } else { None });
+                                let hover_dot =
+                                    hover_flag
+                                        .and_then(|(hi, d)| if hi == idx { Some(d) } else { None });
                                 let mut spans = Vec::new();
                                 spans.extend(flags_slots_with_hover(item.flags, hover_dot));
                                 spans.push(Span::styled(indent, Style::default()));
-                                spans.push(Span::styled(collapse_icon, Style::default().fg(theme::SURFACE)));
+                                spans.push(Span::styled(
+                                    collapse_icon,
+                                    Style::default().fg(theme::SURFACE),
+                                ));
                                 spans.extend(checkbox_spans);
                                 spans.push(Span::styled(item.text.clone(), style));
                                 ListItem::new(Line::from(spans))
@@ -1297,17 +1438,47 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                     }
                 }
 
-                let todo_count = items.iter().filter(|i| !i.is_header && i.depth == 0 && !i.is_code_todo && i.state != CheckState::Checked).count();
-                let done_count = items.iter().filter(|i| !i.is_header && i.depth == 0 && !i.is_code_todo && i.state == CheckState::Checked).count();
+                let todo_count = items
+                    .iter()
+                    .filter(|i| {
+                        !i.is_header
+                            && i.depth == 0
+                            && !i.is_code_todo
+                            && i.state != CheckState::Checked
+                    })
+                    .count();
+                let done_count = items
+                    .iter()
+                    .filter(|i| {
+                        !i.is_header
+                            && i.depth == 0
+                            && !i.is_code_todo
+                            && i.state == CheckState::Checked
+                    })
+                    .count();
 
                 let mut title_spans = vec![
-                    Span::styled(format!(" {} ", tui_title), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
+                    Span::styled(
+                        format!(" {} ", tui_title),
+                        Style::default()
+                            .fg(theme::LAVENDER)
+                            .add_modifier(ratatui::style::Modifier::BOLD),
+                    ),
                     Span::styled("— ", Style::default().fg(theme::SURFACE)),
-                    Span::styled(format!("{} ", tui_path), Style::default().fg(theme::OVERLAY)),
+                    Span::styled(
+                        format!("{} ", tui_path),
+                        Style::default().fg(theme::OVERLAY),
+                    ),
                     Span::styled("— ", Style::default().fg(theme::SURFACE)),
-                    Span::styled(format!("{} pending", todo_count), Style::default().fg(theme::SAPPHIRE)),
+                    Span::styled(
+                        format!("{} pending", todo_count),
+                        Style::default().fg(theme::SAPPHIRE),
+                    ),
                     Span::styled(" · ", Style::default().fg(theme::SURFACE)),
-                    Span::styled(format!("{} done ", done_count), Style::default().fg(theme::GREEN)),
+                    Span::styled(
+                        format!("{} done ", done_count),
+                        Style::default().fg(theme::GREEN),
+                    ),
                 ];
                 let title = Line::from(title_spans);
 
@@ -1318,11 +1489,19 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                 let (_, active_tags) = parse_filter(&search_buffer);
                 let mut filter_spans: Vec<Span> = Vec::new();
                 filter_spans.push(Span::raw("     ")); // 4 cols highlight indent + 1 col flag-leading space
-                let bits = [FLAG_IMPORTANT, FLAG_PRIO, FLAG_LONGTERM, FLAG_IDEA, FLAG_BLOCKED];
+                let bits = [
+                    FLAG_IMPORTANT,
+                    FLAG_PRIO,
+                    FLAG_LONGTERM,
+                    FLAG_IDEA,
+                    FLAG_BLOCKED,
+                ];
                 for (i, &bit) in bits.iter().enumerate() {
                     let is_active = active_tags & bit != 0;
                     let style = if is_active {
-                        Style::default().fg(FLAG_COLORS[i]).add_modifier(ratatui::style::Modifier::BOLD)
+                        Style::default()
+                            .fg(FLAG_COLORS[i])
+                            .add_modifier(ratatui::style::Modifier::BOLD)
                     } else {
                         Style::default().fg(dim_color(FLAG_COLORS[i]))
                     };
@@ -1330,13 +1509,31 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                 }
                 filter_spans.push(Span::raw("  ")); // trailing space + small gap
                 if search_mode {
-                    let (before, after) = search_buffer.split_at(cursor_pos.min(search_buffer.len()));
-                    let cursor_char = after.chars().next().map(|c| c.to_string()).unwrap_or_else(|| " ".to_string());
-                    let rest = if after.len() > cursor_char.len() { &after[cursor_char.len()..] } else { "" };
+                    let (before, after) =
+                        search_buffer.split_at(cursor_pos.min(search_buffer.len()));
+                    let cursor_char = after
+                        .chars()
+                        .next()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| " ".to_string());
+                    let rest = if after.len() > cursor_char.len() {
+                        &after[cursor_char.len()..]
+                    } else {
+                        ""
+                    };
                     filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
-                    filter_spans.push(Span::styled(before.to_string(), Style::default().fg(theme::TEXT)));
-                    filter_spans.push(Span::styled(cursor_char, Style::default().fg(theme::BASE).bg(theme::SAPPHIRE)));
-                    filter_spans.push(Span::styled(rest.to_string(), Style::default().fg(theme::TEXT)));
+                    filter_spans.push(Span::styled(
+                        before.to_string(),
+                        Style::default().fg(theme::TEXT),
+                    ));
+                    filter_spans.push(Span::styled(
+                        cursor_char,
+                        Style::default().fg(theme::BASE).bg(theme::SAPPHIRE),
+                    ));
+                    filter_spans.push(Span::styled(
+                        rest.to_string(),
+                        Style::default().fg(theme::TEXT),
+                    ));
                     // While typing on an empty buffer, hint at the syntax — dimmer than the
                     // "filter" label so it doesn't compete visually.
                     if search_buffer.is_empty() {
@@ -1348,7 +1545,9 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                 } else if !search_buffer.is_empty() {
                     filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
                     for word in search_buffer.split(' ') {
-                        if word.is_empty() { continue; }
+                        if word.is_empty() {
+                            continue;
+                        }
                         let mut tag_color: Option<Color> = None;
                         if let Some(name) = word.strip_prefix('#') {
                             for (idx, &(_, tag_name, _, _)) in FLAG_DEFS.iter().enumerate() {
@@ -1359,12 +1558,17 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             }
                         }
                         let style = match tag_color {
-                            Some(c) => Style::default().fg(c).add_modifier(ratatui::style::Modifier::BOLD),
+                            Some(c) => Style::default()
+                                .fg(c)
+                                .add_modifier(ratatui::style::Modifier::BOLD),
                             None => Style::default().fg(theme::YELLOW),
                         };
                         filter_spans.push(Span::styled(format!("{} ", word), style));
                     }
-                    filter_spans.push(Span::styled(" esc to clear ", Style::default().fg(theme::OVERLAY)));
+                    filter_spans.push(Span::styled(
+                        " esc to clear ",
+                        Style::default().fg(theme::OVERLAY),
+                    ));
                 } else {
                     filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
                     filter_spans.push(Span::styled("filter", Style::default().fg(theme::OVERLAY)));
@@ -1424,16 +1628,23 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                     let vs = state.selected().unwrap_or(0);
                     let ri = vis.get(vs).copied().unwrap_or(0);
                     let cur_flags = if ri < items.len() { items[ri].flags } else { 0 };
-                    let mut spans = vec![
-                        Span::styled(" tags: ", Style::default().fg(Color::Rgb(205, 152, 115))),
-                    ];
+                    let mut spans = vec![Span::styled(
+                        " tags: ",
+                        Style::default().fg(Color::Rgb(205, 152, 115)),
+                    )];
                     for (idx, &(bit, _, _, label)) in FLAG_DEFS.iter().enumerate() {
                         let active = cur_flags & bit != 0;
                         let color = FLAG_COLORS[idx];
                         // Number: always tag color. Colon: always gray. Label: tag color when active, gray otherwise.
-                        spans.push(Span::styled(format!("{}", idx + 1), Style::default().fg(color)));
+                        spans.push(Span::styled(
+                            format!("{}", idx + 1),
+                            Style::default().fg(color),
+                        ));
                         spans.push(Span::styled(":", Style::default().fg(theme::OVERLAY)));
-                        spans.push(Span::styled(format!("{} ", label), Style::default().fg(if active { color } else { theme::OVERLAY })));
+                        spans.push(Span::styled(
+                            format!("{} ", label),
+                            Style::default().fg(if active { color } else { theme::OVERLAY }),
+                        ));
                         spans.push(Span::styled(" ", Style::default()));
                     }
                     Line::from(spans)
@@ -1448,22 +1659,37 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         (" new: ", Color::Rgb(136, 190, 132))
                     };
                     let (before, after) = input_buffer.split_at(cursor_pos.min(input_buffer.len()));
-                    let cursor_char = after.chars().next().map(|c| c.to_string()).unwrap_or_else(|| " ".to_string());
-                    let rest = if after.len() > cursor_char.len() { &after[cursor_char.len()..] } else { "" };
+                    let cursor_char = after
+                        .chars()
+                        .next()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| " ".to_string());
+                    let rest = if after.len() > cursor_char.len() {
+                        &after[cursor_char.len()..]
+                    } else {
+                        ""
+                    };
                     let mut spans = vec![
                         Span::styled(label, Style::default().fg(label_color)),
                         Span::styled(before.to_string(), Style::default().fg(theme::TEXT)),
-                        Span::styled(cursor_char, Style::default().fg(theme::BASE).bg(theme::SAPPHIRE)),
+                        Span::styled(
+                            cursor_char,
+                            Style::default().fg(theme::BASE).bg(theme::SAPPHIRE),
+                        ),
                         Span::styled(rest.to_string(), Style::default().fg(theme::TEXT)),
                     ];
                     if let Some(err) = &category_error {
-                        spans.push(Span::styled(format!("  ← {}", err), Style::default().fg(theme::RED)));
+                        spans.push(Span::styled(
+                            format!("  ← {}", err),
+                            Style::default().fg(theme::RED),
+                        ));
                     }
                     Line::from(spans)
                 } else if vim.active {
-                    Line::from(vec![
-                        Span::styled(vim.buffer.as_str(), Style::default().fg(theme::MAUVE)),
-                    ])
+                    Line::from(vec![Span::styled(
+                        vim.buffer.as_str(),
+                        Style::default().fg(theme::MAUVE),
+                    )])
                 } else {
                     let width = chunks[1].width as usize;
                     let list_height = chunks[0].height.saturating_sub(4) as usize;
@@ -1496,26 +1722,130 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                 // Help overlay
                 if show_help {
                     let help_text = vec![
-                        Line::from(Span::styled("  keybindings", Style::default().fg(theme::MAUVE).add_modifier(ratatui::style::Modifier::BOLD))),
+                        Line::from(Span::styled(
+                            "  keybindings",
+                            Style::default()
+                                .fg(theme::MAUVE)
+                                .add_modifier(ratatui::style::Modifier::BOLD),
+                        )),
                         Line::from(""),
-                        Line::from(vec![Span::styled("  x", Style::default().fg(theme::SAPPHIRE)), Span::styled(" / space / enter  check/uncheck", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  a", Style::default().fg(theme::YELLOW)), Span::styled("                  almost done [/]", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  n", Style::default().fg(theme::GREEN)), Span::styled("                  new todo", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  N", Style::default().fg(theme::GREEN)), Span::styled("                  new category", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  s", Style::default().fg(theme::LAVENDER)), Span::styled("                  add subtask", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  e", Style::default().fg(theme::MAUVE)), Span::styled("                  edit text", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  d", Style::default().fg(theme::RED)), Span::styled("                  delete", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  t", Style::default().fg(theme::PEACH)), Span::styled("                  tags (1-5 to toggle)", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  f", Style::default().fg(theme::GREEN)), Span::styled("                  focus section", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  /", Style::default().fg(theme::SAPPHIRE)), Span::styled("                  filter — fuzzy text + #tagname, or click a dot", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  v", Style::default().fg(theme::SAPPHIRE)), Span::styled("                  view all / collapse all", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  j/k", Style::default().fg(theme::TEXT)), Span::styled("                navigate", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  h/l", Style::default().fg(theme::TEXT)), Span::styled("                collapse / expand", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  J/K", Style::default().fg(theme::TEXT)), Span::styled("                move todo up / down", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  drag", Style::default().fg(theme::TEXT)), Span::styled("               mouse drag to reorder", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  q", Style::default().fg(theme::PEACH)), Span::styled("                  quit", Style::default().fg(theme::TEXT))]),
+                        Line::from(vec![
+                            Span::styled("  x", Style::default().fg(theme::SAPPHIRE)),
+                            Span::styled(
+                                " / space / enter  check/uncheck",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  a", Style::default().fg(theme::YELLOW)),
+                            Span::styled(
+                                "                  almost done [/]",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  n", Style::default().fg(theme::GREEN)),
+                            Span::styled(
+                                "                  new todo",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  N", Style::default().fg(theme::GREEN)),
+                            Span::styled(
+                                "                  new category",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  s", Style::default().fg(theme::LAVENDER)),
+                            Span::styled(
+                                "                  add subtask",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  e", Style::default().fg(theme::MAUVE)),
+                            Span::styled(
+                                "                  edit text",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  d", Style::default().fg(theme::RED)),
+                            Span::styled(
+                                "                  delete",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  t", Style::default().fg(theme::PEACH)),
+                            Span::styled(
+                                "                  tags (1-5 to toggle)",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  f", Style::default().fg(theme::GREEN)),
+                            Span::styled(
+                                "                  focus section",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  /", Style::default().fg(theme::SAPPHIRE)),
+                            Span::styled(
+                                "                  filter — fuzzy text + #tagname, or click a dot",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  v", Style::default().fg(theme::SAPPHIRE)),
+                            Span::styled(
+                                "                  view all / collapse all",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  j/k", Style::default().fg(theme::TEXT)),
+                            Span::styled(
+                                "                navigate",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  h/l", Style::default().fg(theme::TEXT)),
+                            Span::styled(
+                                "                collapse / expand",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  J/K", Style::default().fg(theme::TEXT)),
+                            Span::styled(
+                                "                move todo up / down",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  drag", Style::default().fg(theme::TEXT)),
+                            Span::styled(
+                                "               mouse drag to reorder",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  q", Style::default().fg(theme::PEACH)),
+                            Span::styled(
+                                "                  quit",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
                         Line::from(""),
-                        Line::from(Span::styled("  press any key to close", Style::default().fg(theme::OVERLAY))),
+                        Line::from(Span::styled(
+                            "  press any key to close",
+                            Style::default().fg(theme::OVERLAY),
+                        )),
                     ];
                     let help_h = help_text.len() as u16 + 2;
                     let help_w = 42_u16;
@@ -1563,8 +1893,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         continue;
                     }
                     if let Some(real_idx) = mouse_y_to_real_idx(
-                        mouse.row, list_area, state.offset(),
-                        &visible_for_mouse, &row_counts_for_mouse,
+                        mouse.row,
+                        list_area,
+                        state.offset(),
+                        &visible_for_mouse,
+                        &row_counts_for_mouse,
                     ) {
                         if let Some(pos) = visible_for_mouse.iter().position(|&i| i == real_idx) {
                             state.select(Some(pos));
@@ -1588,11 +1921,17 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                     // (during drag we leave the dots alone so the drag highlight is clean).
                     if drag_candidate.is_none() {
                         let new_hover = mouse_y_to_real_idx(
-                            mouse.row, list_area, state.offset(),
-                            &visible_for_mouse, &row_counts_for_mouse,
-                        ).and_then(|idx| {
+                            mouse.row,
+                            list_area,
+                            state.offset(),
+                            &visible_for_mouse,
+                            &row_counts_for_mouse,
+                        )
+                        .and_then(|idx| {
                             let it = &items[idx];
-                            if it.is_header || it.is_code_todo { return None; }
+                            if it.is_header || it.is_code_todo {
+                                return None;
+                            }
                             mouse_x_to_dot(mouse.column, list_area.x).map(|d| (idx, d))
                         });
                         if new_hover != hover_flag {
@@ -1607,8 +1946,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             drag_active = true;
                             drag_start = Some(start);
                             if let Some(real_idx) = mouse_y_to_real_idx(
-                                mouse.row, list_area, state.offset(),
-                                &visible_for_mouse, &row_counts_for_mouse,
+                                mouse.row,
+                                list_area,
+                                state.offset(),
+                                &visible_for_mouse,
+                                &row_counts_for_mouse,
                             ) {
                                 drag_target = Some(real_idx);
                             }
@@ -1645,7 +1987,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
         }
 
         if let Event::Key(key) = ev {
-            if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+            if key.code == KeyCode::Char('c')
+                && key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL)
+            {
                 break;
             }
 
@@ -1680,7 +2026,9 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         }
                         confirm_delete = false;
                     }
-                    _ => { confirm_delete = false; }
+                    _ => {
+                        confirm_delete = false;
+                    }
                 }
                 continue;
             }
@@ -1690,8 +2038,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
             if flag_mode {
                 let mut consumed = true;
                 match key.code {
-                    KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Char('3') |
-                    KeyCode::Char('4') | KeyCode::Char('5') => {
+                    KeyCode::Char('1')
+                    | KeyCode::Char('2')
+                    | KeyCode::Char('3')
+                    | KeyCode::Char('4')
+                    | KeyCode::Char('5') => {
                         let idx = match key.code {
                             KeyCode::Char(c) => (c as u8 - b'1') as usize,
                             _ => unreachable!(),
@@ -1714,15 +2065,21 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         flag_mode = false;
                         consumed = false;
                     }
-                    KeyCode::Char('j') | KeyCode::Down |
-                    KeyCode::Char('k') | KeyCode::Up |
-                    KeyCode::Char('h') | KeyCode::Left |
-                    KeyCode::Char('l') | KeyCode::Right => {
+                    KeyCode::Char('j')
+                    | KeyCode::Down
+                    | KeyCode::Char('k')
+                    | KeyCode::Up
+                    | KeyCode::Char('h')
+                    | KeyCode::Left
+                    | KeyCode::Char('l')
+                    | KeyCode::Right => {
                         consumed = false;
                     }
                     _ => {}
                 }
-                if consumed { continue; }
+                if consumed {
+                    continue;
+                }
             }
 
             // Search mode
@@ -1735,8 +2092,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             search_buffer.clear();
                         }
                     }
-                    KeyCode::Left => { cursor_pos = prev_char_boundary(&search_buffer, cursor_pos); }
-                    KeyCode::Right => { cursor_pos = next_char_boundary(&search_buffer, cursor_pos); }
+                    KeyCode::Left => {
+                        cursor_pos = prev_char_boundary(&search_buffer, cursor_pos);
+                    }
+                    KeyCode::Right => {
+                        cursor_pos = next_char_boundary(&search_buffer, cursor_pos);
+                    }
                     KeyCode::Backspace => {
                         if cursor_pos > 0 {
                             let prev = prev_char_boundary(&search_buffer, cursor_pos);
@@ -1747,7 +2108,10 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             search_mode = false;
                         }
                     }
-                    KeyCode::Char(c) => { search_buffer.insert(cursor_pos, c); cursor_pos += c.len_utf8(); }
+                    KeyCode::Char(c) => {
+                        search_buffer.insert(cursor_pos, c);
+                        cursor_pos += c.len_utf8();
+                    }
                     _ => {}
                 }
                 // Reset selection when search changes
@@ -1765,9 +2129,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         } else if name.contains('/') || name.contains('\\') {
                             category_error = Some("name cannot contain '/' or '\\'".into());
                         } else {
-                            let cat_dir = PathBuf::from(&config.notez_root).join("_todos").join(&name);
+                            let cat_dir =
+                                PathBuf::from(&config.notez_root).join("_todos").join(&name);
                             if cat_dir.exists() {
-                                category_error = Some(format!("category '{}' already exists", name));
+                                category_error =
+                                    Some(format!("category '{}' already exists", name));
                             } else {
                                 fs::create_dir_all(&cat_dir).ok();
                                 let cat_file = cat_dir.join("TODO.md");
@@ -1780,7 +2146,9 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                                 cursor_pos = 0;
                                 category_mode = false;
                                 category_error = None;
-                                if let Some(real_idx) = items.iter().position(|i| i.is_header && i.project == name) {
+                                if let Some(real_idx) =
+                                    items.iter().position(|i| i.is_header && i.project == name)
+                                {
                                     let new_vis = get_visible_indices(&items);
                                     if let Some(pos) = new_vis.iter().position(|&i| i == real_idx) {
                                         state.select(Some(pos));
@@ -1795,8 +2163,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         category_mode = false;
                         category_error = None;
                     }
-                    KeyCode::Left => { cursor_pos = prev_char_boundary(&input_buffer, cursor_pos); }
-                    KeyCode::Right => { cursor_pos = next_char_boundary(&input_buffer, cursor_pos); }
+                    KeyCode::Left => {
+                        cursor_pos = prev_char_boundary(&input_buffer, cursor_pos);
+                    }
+                    KeyCode::Right => {
+                        cursor_pos = next_char_boundary(&input_buffer, cursor_pos);
+                    }
                     KeyCode::Backspace => {
                         if cursor_pos > 0 {
                             let prev = prev_char_boundary(&input_buffer, cursor_pos);
@@ -1827,18 +2199,21 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             while insert_at < items.len() && !items[insert_at].is_header {
                                 insert_at += 1;
                             }
-                            items.insert(insert_at, TodoItem {
-                                text: input_buffer.clone(),
-                                state: CheckState::Unchecked,
-                                source,
-                                project,
-                                is_header: false,
-                                depth: 0,
-                                has_subtasks: false,
-                                collapsed: false,
-                                is_code_todo: false,
-            flags: 0,
-                            });
+                            items.insert(
+                                insert_at,
+                                TodoItem {
+                                    text: input_buffer.clone(),
+                                    state: CheckState::Unchecked,
+                                    source,
+                                    project,
+                                    is_header: false,
+                                    depth: 0,
+                                    has_subtasks: false,
+                                    collapsed: false,
+                                    is_code_todo: false,
+                                    flags: 0,
+                                },
+                            );
                             let new_vis = get_visible_indices(&items);
                             if let Some(pos) = new_vis.iter().position(|&i| i == insert_at) {
                                 state.select(Some(pos));
@@ -1848,9 +2223,17 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         cursor_pos = 0;
                         input_mode = false;
                     }
-                    KeyCode::Esc => { input_buffer.clear(); cursor_pos = 0; input_mode = false; }
-                    KeyCode::Left => { cursor_pos = prev_char_boundary(&input_buffer, cursor_pos); }
-                    KeyCode::Right => { cursor_pos = next_char_boundary(&input_buffer, cursor_pos); }
+                    KeyCode::Esc => {
+                        input_buffer.clear();
+                        cursor_pos = 0;
+                        input_mode = false;
+                    }
+                    KeyCode::Left => {
+                        cursor_pos = prev_char_boundary(&input_buffer, cursor_pos);
+                    }
+                    KeyCode::Right => {
+                        cursor_pos = next_char_boundary(&input_buffer, cursor_pos);
+                    }
                     KeyCode::Backspace => {
                         if cursor_pos > 0 {
                             let prev = prev_char_boundary(&input_buffer, cursor_pos);
@@ -1858,7 +2241,10 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             cursor_pos = prev;
                         }
                     }
-                    KeyCode::Char(c) => { input_buffer.insert(cursor_pos, c); cursor_pos += c.len_utf8(); }
+                    KeyCode::Char(c) => {
+                        input_buffer.insert(cursor_pos, c);
+                        cursor_pos += c.len_utf8();
+                    }
                     _ => {}
                 }
                 continue;
@@ -1887,22 +2273,27 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
 
                             // Insert after the last child of this parent
                             let mut insert_at = parent_idx + 1;
-                            while insert_at < items.len() && items[insert_at].depth > items[parent_idx].depth {
+                            while insert_at < items.len()
+                                && items[insert_at].depth > items[parent_idx].depth
+                            {
                                 insert_at += 1;
                             }
 
-                            items.insert(insert_at, TodoItem {
-                                text: input_buffer.clone(),
-                                state: CheckState::Unchecked,
-                                source,
-                                project,
-                                is_header: false,
-                                depth: child_depth,
-                                has_subtasks: false,
-                                collapsed: false,
-                                is_code_todo: false,
-            flags: 0,
-                            });
+                            items.insert(
+                                insert_at,
+                                TodoItem {
+                                    text: input_buffer.clone(),
+                                    state: CheckState::Unchecked,
+                                    source,
+                                    project,
+                                    is_header: false,
+                                    depth: child_depth,
+                                    has_subtasks: false,
+                                    collapsed: false,
+                                    is_code_todo: false,
+                                    flags: 0,
+                                },
+                            );
                             // Expand parent if collapsed
                             items[parent_idx].collapsed = false;
                             let new_vis = get_visible_indices(&items);
@@ -1914,9 +2305,17 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         cursor_pos = 0;
                         subtask_mode = false;
                     }
-                    KeyCode::Esc => { input_buffer.clear(); cursor_pos = 0; subtask_mode = false; }
-                    KeyCode::Left => { cursor_pos = prev_char_boundary(&input_buffer, cursor_pos); }
-                    KeyCode::Right => { cursor_pos = next_char_boundary(&input_buffer, cursor_pos); }
+                    KeyCode::Esc => {
+                        input_buffer.clear();
+                        cursor_pos = 0;
+                        subtask_mode = false;
+                    }
+                    KeyCode::Left => {
+                        cursor_pos = prev_char_boundary(&input_buffer, cursor_pos);
+                    }
+                    KeyCode::Right => {
+                        cursor_pos = next_char_boundary(&input_buffer, cursor_pos);
+                    }
                     KeyCode::Backspace => {
                         if cursor_pos > 0 {
                             let prev = prev_char_boundary(&input_buffer, cursor_pos);
@@ -1924,7 +2323,10 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             cursor_pos = prev;
                         }
                     }
-                    KeyCode::Char(c) => { input_buffer.insert(cursor_pos, c); cursor_pos += c.len_utf8(); }
+                    KeyCode::Char(c) => {
+                        input_buffer.insert(cursor_pos, c);
+                        cursor_pos += c.len_utf8();
+                    }
                     _ => {}
                 }
                 continue;
@@ -1941,9 +2343,17 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                         cursor_pos = 0;
                         edit_mode = false;
                     }
-                    KeyCode::Esc => { input_buffer.clear(); cursor_pos = 0; edit_mode = false; }
-                    KeyCode::Left => { cursor_pos = prev_char_boundary(&input_buffer, cursor_pos); }
-                    KeyCode::Right => { cursor_pos = next_char_boundary(&input_buffer, cursor_pos); }
+                    KeyCode::Esc => {
+                        input_buffer.clear();
+                        cursor_pos = 0;
+                        edit_mode = false;
+                    }
+                    KeyCode::Left => {
+                        cursor_pos = prev_char_boundary(&input_buffer, cursor_pos);
+                    }
+                    KeyCode::Right => {
+                        cursor_pos = next_char_boundary(&input_buffer, cursor_pos);
+                    }
                     KeyCode::Backspace => {
                         if cursor_pos > 0 {
                             let prev = prev_char_boundary(&input_buffer, cursor_pos);
@@ -1951,7 +2361,10 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             cursor_pos = prev;
                         }
                     }
-                    KeyCode::Char(c) => { input_buffer.insert(cursor_pos, c); cursor_pos += c.len_utf8(); }
+                    KeyCode::Char(c) => {
+                        input_buffer.insert(cursor_pos, c);
+                        cursor_pos += c.len_utf8();
+                    }
                     _ => {}
                 }
                 continue;
@@ -1959,10 +2372,14 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
 
             // Vim command mode
             if let Some(cmd) = vim.handle_key(key) {
-                if VimCommandMode::is_quit(&cmd) { break; }
+                if VimCommandMode::is_quit(&cmd) {
+                    break;
+                }
                 continue;
             }
-            if vim.active { continue; }
+            if vim.active {
+                continue;
+            }
 
             let visible = compute_visible(&items, &search_buffer);
             let vis_sel = state.selected().unwrap_or(0);
@@ -1985,8 +2402,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             let new_header = (0..=target_real).rev().find(|&i| items[i].is_header);
                             let old_header = (0..=real_idx).rev().find(|&i| items[i].is_header);
                             if new_header != old_header {
-                                if let Some(oh) = old_header { items[oh].collapsed = true; }
-                                if let Some(nh) = new_header { items[nh].collapsed = false; }
+                                if let Some(oh) = old_header {
+                                    items[oh].collapsed = true;
+                                }
+                                if let Some(nh) = new_header {
+                                    items[nh].collapsed = false;
+                                }
                                 // Recalculate visible and find target position
                                 let new_vis = get_visible_indices(&items);
                                 if let Some(pos) = new_vis.iter().position(|&i| i == target_real) {
@@ -2007,8 +2428,12 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             let new_header = (0..=target_real).rev().find(|&i| items[i].is_header);
                             let old_header = (0..=real_idx).rev().find(|&i| items[i].is_header);
                             if new_header != old_header {
-                                if let Some(oh) = old_header { items[oh].collapsed = true; }
-                                if let Some(nh) = new_header { items[nh].collapsed = false; }
+                                if let Some(oh) = old_header {
+                                    items[oh].collapsed = true;
+                                }
+                                if let Some(nh) = new_header {
+                                    items[nh].collapsed = false;
+                                }
                                 let new_vis = get_visible_indices(&items);
                                 if let Some(pos) = new_vis.iter().position(|&i| i == target_real) {
                                     state.select(Some(pos));
@@ -2029,7 +2454,10 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                     }
                 }
                 KeyCode::Char('h') | KeyCode::Left => {
-                    if real_idx < items.len() && !items[real_idx].collapsed && (items[real_idx].has_subtasks || items[real_idx].is_header) {
+                    if real_idx < items.len()
+                        && !items[real_idx].collapsed
+                        && (items[real_idx].has_subtasks || items[real_idx].is_header)
+                    {
                         items[real_idx].collapsed = true;
                         focus_active = false;
                     }
@@ -2037,8 +2465,13 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
 
                 KeyCode::Char('v') => {
                     // Find current section header
-                    let current_header = (0..=real_idx).rev().find(|&i| items[i].is_header).unwrap_or(0);
-                    let any_collapsed = items.iter().any(|i| (i.is_header || i.has_subtasks) && i.collapsed);
+                    let current_header = (0..=real_idx)
+                        .rev()
+                        .find(|&i| items[i].is_header)
+                        .unwrap_or(0);
+                    let any_collapsed = items
+                        .iter()
+                        .any(|i| (i.is_header || i.has_subtasks) && i.collapsed);
                     for item in items.iter_mut() {
                         if item.is_header || item.has_subtasks {
                             item.collapsed = !any_collapsed;
@@ -2055,19 +2488,28 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                 }
 
                 KeyCode::Char(' ') | KeyCode::Char('x') | KeyCode::Enter => {
-                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                    if real_idx < items.len()
+                        && !items[real_idx].is_header
+                        && !items[real_idx].is_code_todo
+                    {
                         if items[real_idx].has_subtasks {
                             let parent_depth = items[real_idx].depth;
                             let all_checked = {
                                 let mut j = real_idx + 1;
                                 let mut all = true;
                                 while j < items.len() && items[j].depth > parent_depth {
-                                    if items[j].state != CheckState::Checked { all = false; }
+                                    if items[j].state != CheckState::Checked {
+                                        all = false;
+                                    }
                                     j += 1;
                                 }
                                 all
                             };
-                            let new_state = if all_checked { CheckState::Unchecked } else { CheckState::Checked };
+                            let new_state = if all_checked {
+                                CheckState::Unchecked
+                            } else {
+                                CheckState::Checked
+                            };
                             let mut j = real_idx + 1;
                             while j < items.len() && items[j].depth > parent_depth {
                                 items[j].state = new_state.clone();
@@ -2084,7 +2526,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                 }
 
                 KeyCode::Char('a') => {
-                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].has_subtasks && !items[real_idx].is_code_todo {
+                    if real_idx < items.len()
+                        && !items[real_idx].is_header
+                        && !items[real_idx].has_subtasks
+                        && !items[real_idx].is_code_todo
+                    {
                         items[real_idx].state = match items[real_idx].state {
                             CheckState::Half => CheckState::Unchecked,
                             _ => CheckState::Half,
@@ -2110,7 +2556,11 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                 }
 
                 KeyCode::Char('s') => {
-                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo && items[real_idx].depth < 2 {
+                    if real_idx < items.len()
+                        && !items[real_idx].is_header
+                        && !items[real_idx].is_code_todo
+                        && items[real_idx].depth < 2
+                    {
                         subtask_mode = true;
                         input_buffer.clear();
                         cursor_pos = 0;
@@ -2118,13 +2568,19 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                 }
 
                 KeyCode::Char('d') => {
-                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                    if real_idx < items.len()
+                        && !items[real_idx].is_header
+                        && !items[real_idx].is_code_todo
+                    {
                         confirm_delete = true;
                     }
                 }
 
                 KeyCode::Char('e') => {
-                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                    if real_idx < items.len()
+                        && !items[real_idx].is_header
+                        && !items[real_idx].is_code_todo
+                    {
                         edit_mode = true;
                         edit_idx = real_idx;
                         input_buffer = items[real_idx].text.clone();
@@ -2141,7 +2597,10 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                     if real_idx < items.len() {
                         if focus_active {
                             // Find the header of the section we're currently in
-                            let current_header = (0..=real_idx).rev().find(|&i| items[i].is_header).unwrap_or(real_idx);
+                            let current_header = (0..=real_idx)
+                                .rev()
+                                .find(|&i| items[i].is_header)
+                                .unwrap_or(real_idx);
                             // Restore previous collapsed state
                             for &(idx, was_collapsed) in &pre_focus_collapsed {
                                 if idx < items.len() {
@@ -2156,7 +2615,9 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
                             focus_active = false;
                         } else {
                             // Save current collapsed state
-                            pre_focus_collapsed = items.iter().enumerate()
+                            pre_focus_collapsed = items
+                                .iter()
+                                .enumerate()
                                 .filter(|(_, item)| item.is_header)
                                 .map(|(i, item)| (i, item.collapsed))
                                 .collect();
@@ -2180,11 +2641,17 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
 
                 // Move todo (and its subtree) down past the next sibling block
                 KeyCode::Char('J') => {
-                    if real_idx < items.len() && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                    if real_idx < items.len()
+                        && !items[real_idx].is_header
+                        && !items[real_idx].is_code_todo
+                    {
                         let depth = items[real_idx].depth;
                         let a_end = block_end(&items, real_idx);
                         // Next sibling block must exist at the same depth, in the same section
-                        if a_end < items.len() && !items[a_end].is_header && items[a_end].depth == depth {
+                        if a_end < items.len()
+                            && !items[a_end].is_header
+                            && items[a_end].depth == depth
+                        {
                             let b_end = block_end(&items, a_end);
                             let a_len = a_end - real_idx;
                             // Rotate [A..B] left by len(A) so order becomes [B..A]
@@ -2200,14 +2667,25 @@ fn run_todo_tui(mut items: Vec<TodoItem>, global: bool, tui_title: &str, tui_pat
 
                 // Move todo (and its subtree) up past the previous sibling block
                 KeyCode::Char('K') => {
-                    if real_idx < items.len() && real_idx > 0 && !items[real_idx].is_header && !items[real_idx].is_code_todo {
+                    if real_idx < items.len()
+                        && real_idx > 0
+                        && !items[real_idx].is_header
+                        && !items[real_idx].is_code_todo
+                    {
                         let depth = items[real_idx].depth;
                         // Walk back to find the previous sibling at the same depth in this section
                         let mut prev_start: Option<usize> = None;
                         for i in (0..real_idx).rev() {
-                            if items[i].is_header { break; }
-                            if items[i].depth < depth { break; }
-                            if items[i].depth == depth { prev_start = Some(i); break; }
+                            if items[i].is_header {
+                                break;
+                            }
+                            if items[i].depth < depth {
+                                break;
+                            }
+                            if items[i].depth == depth {
+                                prev_start = Some(i);
+                                break;
+                            }
                         }
                         if let Some(prev_start) = prev_start {
                             let a_end = block_end(&items, real_idx);
@@ -2280,9 +2758,42 @@ mod tests {
     fn derive_parent_from_subtasks() {
         let source = PathBuf::from("/tmp/TODO.md");
         let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, depth: 0, has_subtasks: true, collapsed: false, is_code_todo: false, flags: 0 },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
-            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem {
+                text: "parent".into(),
+                state: CheckState::Unchecked,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 0,
+                has_subtasks: true,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
+            TodoItem {
+                text: "sub1".into(),
+                state: CheckState::Checked,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 1,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
+            TodoItem {
+                text: "sub2".into(),
+                state: CheckState::Unchecked,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 1,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
         ];
         derive_parent_states(&mut items);
         assert_eq!(items[0].state, CheckState::Half); // 1 of 2 done
@@ -2291,20 +2802,65 @@ mod tests {
     #[test]
     fn derive_parent_clears_has_subtasks_when_empty() {
         let source = PathBuf::from("/tmp/TODO.md");
-        let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 0, has_subtasks: true, collapsed: false, is_code_todo: false, flags: 0 },
-        ];
+        let mut items = vec![TodoItem {
+            text: "parent".into(),
+            state: CheckState::Checked,
+            source: source.clone(),
+            project: "t".into(),
+            is_header: false,
+            depth: 0,
+            has_subtasks: true,
+            collapsed: false,
+            is_code_todo: false,
+            flags: 0,
+        }];
         derive_parent_states(&mut items);
-        assert!(!items[0].has_subtasks, "has_subtasks must be cleared when no children remain");
+        assert!(
+            !items[0].has_subtasks,
+            "has_subtasks must be cleared when no children remain"
+        );
     }
 
     #[test]
     fn derive_parent_all_done() {
         let source = PathBuf::from("/tmp/TODO.md");
         let mut items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, depth: 0, has_subtasks: true, collapsed: false, is_code_todo: false, flags: 0 },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
-            TodoItem { text: "sub2".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem {
+                text: "parent".into(),
+                state: CheckState::Unchecked,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 0,
+                has_subtasks: true,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
+            TodoItem {
+                text: "sub1".into(),
+                state: CheckState::Checked,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 1,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
+            TodoItem {
+                text: "sub2".into(),
+                state: CheckState::Checked,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 1,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
         ];
         derive_parent_states(&mut items);
         assert_eq!(items[0].state, CheckState::Checked); // all done
@@ -2314,9 +2870,42 @@ mod tests {
     fn serialize_with_subtasks() {
         let source = PathBuf::from("/tmp/TODO.md");
         let items = vec![
-            TodoItem { text: "parent".into(), state: CheckState::Half, source: source.clone(), project: "t".into(), is_header: false, depth: 0, has_subtasks: true, collapsed: false, is_code_todo: false, flags: 0 },
-            TodoItem { text: "sub1".into(), state: CheckState::Checked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
-            TodoItem { text: "sub2".into(), state: CheckState::Unchecked, source: source.clone(), project: "t".into(), is_header: false, depth: 1, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem {
+                text: "parent".into(),
+                state: CheckState::Half,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 0,
+                has_subtasks: true,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
+            TodoItem {
+                text: "sub1".into(),
+                state: CheckState::Checked,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 1,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
+            TodoItem {
+                text: "sub2".into(),
+                state: CheckState::Unchecked,
+                source: source.clone(),
+                project: "t".into(),
+                is_header: false,
+                depth: 1,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
         ];
         let md = serialize_todos_for_file(&items, &source);
         assert!(md.contains("- [/] parent"));
@@ -2340,7 +2929,10 @@ mod tests {
     }
 
     fn header(text: &str) -> TodoItem {
-        TodoItem { is_header: true, ..item(text, 0) }
+        TodoItem {
+            is_header: true,
+            ..item(text, 0)
+        }
     }
 
     #[test]
@@ -2352,42 +2944,31 @@ mod tests {
             item("A.2", 1),
             item("B", 0),
         ];
-        assert_eq!(block_end(&items, 0), 4, "block of A includes A.1, A.1.1, A.2");
+        assert_eq!(
+            block_end(&items, 0),
+            4,
+            "block of A includes A.1, A.1.1, A.2"
+        );
         assert_eq!(block_end(&items, 1), 3, "block of A.1 includes A.1.1");
         assert_eq!(block_end(&items, 4), 5, "block of B is just B");
     }
 
     #[test]
     fn can_drag_same_depth_same_section() {
-        let items = vec![
-            header("## A"),
-            item("X", 0),
-            item("Y", 0),
-            item("Z", 0),
-        ];
+        let items = vec![header("## A"), item("X", 0), item("Y", 0), item("Z", 0)];
         assert!(can_drag(&items, 1, 3), "X → Z within section");
         assert!(can_drag(&items, 3, 1), "Z → X (drag up)");
     }
 
     #[test]
     fn can_drag_rejects_cross_section() {
-        let items = vec![
-            header("## A"),
-            item("X", 0),
-            header("## B"),
-            item("Y", 0),
-        ];
+        let items = vec![header("## A"), item("X", 0), header("## B"), item("Y", 0)];
         assert!(!can_drag(&items, 1, 3), "X → Y crosses section header");
     }
 
     #[test]
     fn can_drag_rejects_cross_parent() {
-        let items = vec![
-            item("A", 0),
-            item("A.1", 1),
-            item("B", 0),
-            item("B.1", 1),
-        ];
+        let items = vec![item("A", 0), item("A.1", 1), item("B", 0), item("B.1", 1)];
         assert!(!can_drag(&items, 1, 3), "A.1 → B.1 crosses parent boundary");
     }
 
@@ -2408,23 +2989,22 @@ mod tests {
         ];
         // Drag A down past B
         let new_idx = perform_drag_move(&mut items, 0, 2);
-        assert_eq!(items.iter().map(|i| i.text.clone()).collect::<Vec<_>>(),
-                   vec!["B", "B.1", "B.2", "A", "A.1"]);
+        assert_eq!(
+            items.iter().map(|i| i.text.clone()).collect::<Vec<_>>(),
+            vec!["B", "B.1", "B.2", "A", "A.1"]
+        );
         assert_eq!(new_idx, 3, "A's new position");
     }
 
     #[test]
     fn perform_drag_move_up() {
-        let mut items = vec![
-            item("A", 0),
-            item("B", 0),
-            item("B.1", 1),
-            item("C", 0),
-        ];
+        let mut items = vec![item("A", 0), item("B", 0), item("B.1", 1), item("C", 0)];
         // Drag C up past B (B has subtasks, must go with it)
         let new_idx = perform_drag_move(&mut items, 3, 1);
-        assert_eq!(items.iter().map(|i| i.text.clone()).collect::<Vec<_>>(),
-                   vec!["A", "C", "B", "B.1"]);
+        assert_eq!(
+            items.iter().map(|i| i.text.clone()).collect::<Vec<_>>(),
+            vec!["A", "C", "B", "B.1"]
+        );
         assert_eq!(new_idx, 1);
     }
 
@@ -2445,8 +3025,16 @@ mod tests {
         // split_at/insert/remove was called on a non-boundary index.
         let s = "å";
         assert_eq!(s.len(), 2);
-        assert_eq!(next_char_boundary(s, 0), 2, "right past 'å' lands on end-of-string");
-        assert_eq!(prev_char_boundary(s, 2), 0, "left from end of 'å' lands on start");
+        assert_eq!(
+            next_char_boundary(s, 0),
+            2,
+            "right past 'å' lands on end-of-string"
+        );
+        assert_eq!(
+            prev_char_boundary(s, 2),
+            0,
+            "left from end of 'å' lands on start"
+        );
         assert_eq!(prev_char_boundary(s, 0), 0, "left from start clamps");
         assert_eq!(next_char_boundary(s, 2), 2, "right from end clamps");
     }
@@ -2455,8 +3043,16 @@ mod tests {
     fn char_boundaries_skip_into_multibyte() {
         // If somehow asked from an interior byte, we still land on a boundary.
         let s = "aåb"; // bytes: a(0) å(1..3) b(3)
-        assert_eq!(prev_char_boundary(s, 3), 1, "left from 'b' goes to start of 'å'");
-        assert_eq!(next_char_boundary(s, 1), 3, "right from start of 'å' goes to 'b'");
+        assert_eq!(
+            prev_char_boundary(s, 3),
+            1,
+            "left from 'b' goes to start of 'å'"
+        );
+        assert_eq!(
+            next_char_boundary(s, 1),
+            3,
+            "right from start of 'å' goes to 'b'"
+        );
     }
 
     #[test]
@@ -2518,15 +3114,21 @@ mod tests {
     #[test]
     fn item_matches_combines_text_and_tags() {
         let i = TodoItem {
-            text: "fix login bug".into(), state: CheckState::Unchecked,
-            source: PathBuf::from("/tmp/TODO.md"), project: "t".into(),
-            is_header: false, depth: 0, has_subtasks: false, collapsed: false,
-            is_code_todo: false, flags: FLAG_PRIO,
+            text: "fix login bug".into(),
+            state: CheckState::Unchecked,
+            source: PathBuf::from("/tmp/TODO.md"),
+            project: "t".into(),
+            is_header: false,
+            depth: 0,
+            has_subtasks: false,
+            collapsed: false,
+            is_code_todo: false,
+            flags: FLAG_PRIO,
         };
         assert!(item_matches(&i, "fix", &[FLAG_PRIO]));
-        assert!(item_matches(&i, "flb", &[FLAG_PRIO]));   // fuzzy
+        assert!(item_matches(&i, "flb", &[FLAG_PRIO])); // fuzzy
         assert!(!item_matches(&i, "fix", &[FLAG_IMPORTANT])); // wrong tag
-        assert!(!item_matches(&i, "xyz", &[FLAG_PRIO]));      // no text match
+        assert!(!item_matches(&i, "xyz", &[FLAG_PRIO])); // no text match
     }
 
     #[test]
@@ -2564,10 +3166,16 @@ mod tests {
     #[test]
     fn item_matches_prefix_or_semantics() {
         let i = TodoItem {
-            text: "x".into(), state: CheckState::Unchecked,
-            source: PathBuf::from("/tmp/TODO.md"), project: "t".into(),
-            is_header: false, depth: 0, has_subtasks: false, collapsed: false,
-            is_code_todo: false, flags: FLAG_IDEA,
+            text: "x".into(),
+            state: CheckState::Unchecked,
+            source: PathBuf::from("/tmp/TODO.md"),
+            project: "t".into(),
+            is_header: false,
+            depth: 0,
+            has_subtasks: false,
+            collapsed: false,
+            is_code_todo: false,
+            flags: FLAG_IDEA,
         };
         // #i = important | idea — item with idea passes (≥1 in set)
         assert!(item_matches(&i, "", &[FLAG_IMPORTANT | FLAG_IDEA]));
@@ -2581,10 +3189,16 @@ mod tests {
             header("## Section"),
             item("parent", 0),
             TodoItem {
-                text: "child #prio".into(), state: CheckState::Unchecked,
-                source: PathBuf::from("/tmp/TODO.md"), project: "t".into(),
-                is_header: false, depth: 1, has_subtasks: false, collapsed: false,
-                is_code_todo: false, flags: FLAG_PRIO,
+                text: "child #prio".into(),
+                state: CheckState::Unchecked,
+                source: PathBuf::from("/tmp/TODO.md"),
+                project: "t".into(),
+                is_header: false,
+                depth: 1,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: FLAG_PRIO,
             },
             item("other", 0),
         ];
@@ -2605,8 +3219,30 @@ mod tests {
     fn roundtrip_preserves_items() {
         let source = PathBuf::from("/tmp/test/TODO.md");
         let items = vec![
-            TodoItem { text: "buy milk".into(), state: CheckState::Unchecked, source: source.clone(), project: "test".into(), is_header: false, depth: 0, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
-            TodoItem { text: "fix bug".into(), state: CheckState::Checked, source: source.clone(), project: "test".into(), is_header: false, depth: 0, has_subtasks: false, collapsed: false, is_code_todo: false, flags: 0 },
+            TodoItem {
+                text: "buy milk".into(),
+                state: CheckState::Unchecked,
+                source: source.clone(),
+                project: "test".into(),
+                is_header: false,
+                depth: 0,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
+            TodoItem {
+                text: "fix bug".into(),
+                state: CheckState::Checked,
+                source: source.clone(),
+                project: "test".into(),
+                is_header: false,
+                depth: 0,
+                has_subtasks: false,
+                collapsed: false,
+                is_code_todo: false,
+                flags: 0,
+            },
         ];
         let md = serialize_todos_for_file(&items, &source);
         let parsed = parse_todos_from_content(&md);

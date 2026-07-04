@@ -108,6 +108,12 @@ Multi-word titles work without quotes: `notez add my cool idea`
 | `notez nav` / `notez -n` | Pick a global subdirectory (globe/lock icons), open in yazi |
 | `notez search <term>` | Search note content across **all** notes (rg + fzf) |
 | `notez mkdir <name>` | Create a numbered subdirectory |
+| `notez sync` | Mirror out-of-band local notes into `~/notez/`, prune dead links |
+
+Global-mode commands (`-g`, plus `edit`/`search`) run the sync pass automatically on
+startup, so notes written to a project's `.notez/` by editors or agents (not through
+the CLI) still show up in the global view. `notez sync` is the explicit form and
+reports what changed.
 
 **Tree keybindings:**
 
@@ -188,7 +194,7 @@ A full interactive todo manager, installed as a standalone command alongside not
 
 **Focus mode:** Press `f` to focus the current section. All others collapse. Navigate between sections and focus auto-follows. Press `f` again to restore the previous view.
 
-**Filter:** Press `/` (or click the search field) to start filtering. Text matches fuzzily; `#tagname` filters by tag with prefix support. `#imp` matches `#important`, `#i` matches `#important` and `#idea`, `#1`–`#5` reference tags by index, `#13` = tag 1 ∪ tag 3, `#` alone matches anything tagged. Multiple tokens combine with AND across, OR within. Click the dim dots next to the search field to toggle tags directly. `Enter` keeps the filter active, `Esc` clears it. Filter auto-expands matching sections so results are immediately visible.
+**Filter:** Press `/` (or click the search field) to start filtering. Text matches fuzzily; `#tagname` filters by tag with prefix support. `#imp` matches `#important`, `#i` matches `#important` and `#idea`, `#1`-`#5` reference tags by index, `#13` = tag 1 ∪ tag 3, `#` alone matches anything tagged. Multiple tokens combine with AND across, OR within. Click the dim dots next to the search field to toggle tags directly. `Enter` keeps the filter active, `Esc` clears it. Filter auto-expands matching sections so results are immediately visible.
 
 **Reorder:** `J`/`K` (shift) moves a todo up or down within its section, taking subtasks with it. Mouse: click + drag a row to reorder.
 

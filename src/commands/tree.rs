@@ -7,10 +7,9 @@ use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Padding, Paragraph};
 
 use crate::commands::todo::{
-    FLAG_COLORS, FLAG_SHAPES, FLAG_DEFS, flags_slots,
-    dim_color, fuzzy_match, match_tag_prefix, mouse_x_to_filter_dot,
-    parse_filter, parse_filter_sets, toggle_filter_tag,
-    prev_char_boundary, next_char_boundary,
+    dim_color, flags_slots, fuzzy_match, match_tag_prefix, mouse_x_to_filter_dot,
+    next_char_boundary, parse_filter, parse_filter_sets, prev_char_boundary, toggle_filter_tag,
+    FLAG_COLORS, FLAG_DEFS, FLAG_SHAPES,
 };
 use crate::config::Config;
 use crate::numbering;
@@ -36,11 +35,14 @@ fn load_tags(root: &Path) -> HashMap<String, u8> {
         Ok(c) => c,
         Err(_) => return HashMap::new(),
     };
-    content.lines().filter_map(|line| {
-        let (name, flags_str) = line.split_once(':')?;
-        let flags = flags_str.trim().parse::<u8>().ok()?;
-        Some((name.to_string(), flags))
-    }).collect()
+    content
+        .lines()
+        .filter_map(|line| {
+            let (name, flags_str) = line.split_once(':')?;
+            let flags = flags_str.trim().parse::<u8>().ok()?;
+            Some((name.to_string(), flags))
+        })
+        .collect()
 }
 
 fn save_tags(root: &Path, tags: &HashMap<String, u8>) {
@@ -58,17 +60,28 @@ pub fn run_tree(global: bool, public: bool) {
     let config = Config::require();
 
     if global {
+        crate::commands::sync::reconcile(&config);
         let root = project::resolve_notez_dir(&config, true, false);
         if !root.exists() {
             let colors = crate::colors::Colors::new();
-            println!("\n  {} No notez directory here.\n", colors.overlay.apply_to("─"));
+            println!(
+                "\n  {} No notez directory here.\n",
+                colors.overlay.apply_to("─")
+            );
             return;
         }
         let mut nodes = build_tree_nodes(&root);
         let tags = load_tags(&root);
         for node in nodes.iter_mut() {
-            let rel = node.path.strip_prefix(&root).unwrap_or(&node.path).to_string_lossy().to_string();
-            if let Some(&flags) = tags.get(&rel) { node.flags = flags; }
+            let rel = node
+                .path
+                .strip_prefix(&root)
+                .unwrap_or(&node.path)
+                .to_string_lossy()
+                .to_string();
+            if let Some(&flags) = tags.get(&rel) {
+                node.flags = flags;
+            }
         }
         // All depth-0 dirs in the global tree live under notez_root, which IS the
         // private store (since the layout inversion of 2026-04-15). Mark them private;
@@ -81,13 +94,16 @@ pub fn run_tree(global: bool, public: bool) {
 
         // Also scan project paths for public notez/ dirs (like todoz -g does)
         let mapping = project::ProjectMapping::load();
-        let existing_names: Vec<String> = nodes.iter()
+        let existing_names: Vec<String> = nodes
+            .iter()
             .filter(|n| n.is_dir && n.depth == 0)
             .map(|n| n.name.clone())
             .collect();
         for (name, path) in &mapping.projects {
             let public_dir = PathBuf::from(path).join("notez");
-            if !public_dir.exists() { continue; }
+            if !public_dir.exists() {
+                continue;
+            }
             // Skip if this project already has a public entry (check by resolving existing symlinks)
             let already_public = nodes.iter().any(|n| {
                 n.is_dir && n.depth == 0 && {
@@ -95,10 +111,14 @@ pub fn run_tree(global: bool, public: bool) {
                     resolved == public_dir || resolved.starts_with(&public_dir)
                 }
             });
-            if already_public { continue; }
+            if already_public {
+                continue;
+            }
 
             let mut public_nodes = build_tree_nodes(&public_dir);
-            if public_nodes.is_empty() { continue; }
+            if public_nodes.is_empty() {
+                continue;
+            }
 
             // Create a synthetic project wrapper node
             let wrapper_idx = nodes.len();
@@ -127,41 +147,70 @@ pub fn run_tree(global: bool, public: bool) {
             }
             let tags = load_tags(&public_dir);
             for node in public_nodes.iter_mut() {
-                let rel = node.path.strip_prefix(&public_dir).unwrap_or(&node.path).to_string_lossy().to_string();
-                if let Some(&flags) = tags.get(&rel) { node.flags = flags; }
+                let rel = node
+                    .path
+                    .strip_prefix(&public_dir)
+                    .unwrap_or(&node.path)
+                    .to_string_lossy()
+                    .to_string();
+                if let Some(&flags) = tags.get(&rel) {
+                    node.flags = flags;
+                }
             }
             nodes.extend(public_nodes);
         }
 
         if nodes.is_empty() {
             let colors = crate::colors::Colors::new();
-            println!("\n  {} Empty notez directory.\n", colors.overlay.apply_to("─"));
+            println!(
+                "\n  {} Empty notez directory.\n",
+                colors.overlay.apply_to("─")
+            );
             return;
         }
 
-        let path = config.notez_root.replacen(&dirs::home_dir().unwrap().to_string_lossy().to_string(), "~", 1);
+        let path = config.notez_root.replacen(
+            &dirs::home_dir().unwrap().to_string_lossy().to_string(),
+            "~",
+            1,
+        );
         let title = "notez (global)".to_string();
         run_tree_tui(nodes, &config.editor, &title, &path, &root);
     } else if public {
         let root = project::local_public_dir();
         if !root.exists() {
             let colors = crate::colors::Colors::new();
-            println!("\n  {} No notez directory here.\n", colors.overlay.apply_to("─"));
+            println!(
+                "\n  {} No notez directory here.\n",
+                colors.overlay.apply_to("─")
+            );
             return;
         }
         let mut nodes = build_tree_nodes(&root);
         if nodes.is_empty() {
             let colors = crate::colors::Colors::new();
-            println!("\n  {} Empty notez directory.\n", colors.overlay.apply_to("─"));
+            println!(
+                "\n  {} Empty notez directory.\n",
+                colors.overlay.apply_to("─")
+            );
             return;
         }
         let tags = load_tags(&root);
         for node in nodes.iter_mut() {
-            let rel = node.path.strip_prefix(&root).unwrap_or(&node.path).to_string_lossy().to_string();
-            if let Some(&flags) = tags.get(&rel) { node.flags = flags; }
+            let rel = node
+                .path
+                .strip_prefix(&root)
+                .unwrap_or(&node.path)
+                .to_string_lossy()
+                .to_string();
+            if let Some(&flags) = tags.get(&rel) {
+                node.flags = flags;
+            }
         }
         for node in nodes.iter_mut() {
-            if node.depth == 0 { node.scope_icon = project::ICON_PUBLIC; }
+            if node.depth == 0 {
+                node.scope_icon = project::ICON_PUBLIC;
+            }
         }
         let cwd = std::env::current_dir().unwrap_or_default();
         let name = crate::project::detect_project_name(&cwd);
@@ -177,12 +226,21 @@ pub fn run_tree(global: bool, public: bool) {
         if private_root.exists() {
             let mut private_nodes = build_tree_nodes(&private_root);
             for node in private_nodes.iter_mut() {
-                if node.depth == 0 { node.scope_icon = project::ICON_PRIVATE; }
+                if node.depth == 0 {
+                    node.scope_icon = project::ICON_PRIVATE;
+                }
             }
             let tags = load_tags(&private_root);
             for node in private_nodes.iter_mut() {
-                let rel = node.path.strip_prefix(&private_root).unwrap_or(&node.path).to_string_lossy().to_string();
-                if let Some(&flags) = tags.get(&rel) { node.flags = flags; }
+                let rel = node
+                    .path
+                    .strip_prefix(&private_root)
+                    .unwrap_or(&node.path)
+                    .to_string_lossy()
+                    .to_string();
+                if let Some(&flags) = tags.get(&rel) {
+                    node.flags = flags;
+                }
             }
             nodes.extend(private_nodes);
         }
@@ -192,32 +250,56 @@ pub fn run_tree(global: bool, public: bool) {
             let offset = nodes.len();
             let mut public_nodes = build_tree_nodes(&public_root);
             for node in public_nodes.iter_mut() {
-                if node.depth == 0 { node.scope_icon = project::ICON_PUBLIC; }
-                if let Some(ref mut p) = node.parent_idx { *p += offset; }
+                if node.depth == 0 {
+                    node.scope_icon = project::ICON_PUBLIC;
+                }
+                if let Some(ref mut p) = node.parent_idx {
+                    *p += offset;
+                }
             }
             let tags = load_tags(&public_root);
             for node in public_nodes.iter_mut() {
-                let rel = node.path.strip_prefix(&public_root).unwrap_or(&node.path).to_string_lossy().to_string();
-                if let Some(&flags) = tags.get(&rel) { node.flags = flags; }
+                let rel = node
+                    .path
+                    .strip_prefix(&public_root)
+                    .unwrap_or(&node.path)
+                    .to_string_lossy()
+                    .to_string();
+                if let Some(&flags) = tags.get(&rel) {
+                    node.flags = flags;
+                }
             }
             nodes.extend(public_nodes);
         }
 
         if nodes.is_empty() {
             let colors = crate::colors::Colors::new();
-            println!("\n  {} No notez directory here.\n", colors.overlay.apply_to("─"));
+            println!(
+                "\n  {} No notez directory here.\n",
+                colors.overlay.apply_to("─")
+            );
             return;
         }
 
         let cwd = std::env::current_dir().unwrap_or_default();
         let name = crate::project::detect_project_name(&cwd);
         let title = format!("notez ({})", name);
-        let root = if private_root.exists() { private_root } else { public_root };
+        let root = if private_root.exists() {
+            private_root
+        } else {
+            public_root
+        };
         run_tree_tui(nodes, &config.editor, &title, ".notez + notez", &root);
     }
 }
 
-fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path: &str, root: &Path) {
+fn run_tree_tui(
+    mut nodes: Vec<TreeNode>,
+    editor: &str,
+    title: &str,
+    title_path: &str,
+    root: &Path,
+) {
     let mut terminal = tui::enter().expect("failed to enter TUI");
     let mut state = ListState::default();
     state.select(Some(0));
@@ -294,13 +376,21 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                         // Tree connectors for nested items
                         let icon = if node.depth == 0 {
                             if node.is_dir {
-                                if node.expanded { "▼ " } else { "▶ " }
+                                if node.expanded {
+                                    "▼ "
+                                } else {
+                                    "▶ "
+                                }
                             } else {
                                 "  "
                             }
                         } else {
                             if node.is_dir {
-                                if node.expanded { "├─▼ " } else { "├─▶ " }
+                                if node.expanded {
+                                    "├─▼ "
+                                } else {
+                                    "├─▶ "
+                                }
                             } else {
                                 "│   "
                             }
@@ -316,40 +406,77 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             let count_str = format!("{}", node.child_count);
                             let scope_len = if scope.is_empty() { 0 } else { 2 }; // icon + space
                             let prefix_len = 7 + indent.len() + icon.len() + name.len() + scope_len;
-                            let avail = inner_width.saturating_sub(prefix_len + count_str.len() + 2);
+                            let avail =
+                                inner_width.saturating_sub(prefix_len + count_str.len() + 2);
 
-                            spans.push(Span::styled(format!("{}{}", indent, icon), Style::default().fg(theme::SURFACE)));
+                            spans.push(Span::styled(
+                                format!("{}{}", indent, icon),
+                                Style::default().fg(theme::SURFACE),
+                            ));
                             if !scope.is_empty() {
-                                spans.push(Span::styled(format!("{} ", scope), Style::default().fg(theme::OVERLAY)));
+                                spans.push(Span::styled(
+                                    format!("{} ", scope),
+                                    Style::default().fg(theme::OVERLAY),
+                                ));
                             }
-                            spans.push(Span::styled(name.to_string(), Style::default().fg(theme::SAPPHIRE)));
+                            spans.push(Span::styled(
+                                name.to_string(),
+                                Style::default().fg(theme::SAPPHIRE),
+                            ));
                             if avail > 3 {
                                 let dots = "·".repeat(avail);
-                                spans.push(Span::styled(format!(" {} ", dots), Style::default().fg(theme::SURFACE)));
+                                spans.push(Span::styled(
+                                    format!(" {} ", dots),
+                                    Style::default().fg(theme::SURFACE),
+                                ));
                             } else {
                                 spans.push(Span::styled(" ", Style::default()));
                             }
-                            spans.push(Span::styled(count_str, Style::default().fg(theme::OVERLAY)));
+                            spans
+                                .push(Span::styled(count_str, Style::default().fg(theme::OVERLAY)));
                             ListItem::new(Line::from(spans))
                         } else if node.is_dir {
-                            spans.push(Span::styled(format!("{}{}", indent, icon), Style::default().fg(theme::SURFACE)));
+                            spans.push(Span::styled(
+                                format!("{}{}", indent, icon),
+                                Style::default().fg(theme::SURFACE),
+                            ));
                             if !scope.is_empty() {
-                                spans.push(Span::styled(format!("{} ", scope), Style::default().fg(theme::OVERLAY)));
+                                spans.push(Span::styled(
+                                    format!("{} ", scope),
+                                    Style::default().fg(theme::OVERLAY),
+                                ));
                             }
-                            spans.push(Span::styled(name.to_string(), Style::default().fg(theme::SAPPHIRE)));
+                            spans.push(Span::styled(
+                                name.to_string(),
+                                Style::default().fg(theme::SAPPHIRE),
+                            ));
                             ListItem::new(Line::from(spans))
                         } else {
-                            spans.push(Span::styled(format!("{}{}", indent, icon), Style::default().fg(theme::SURFACE)));
-                            spans.push(Span::styled(name.to_string(), Style::default().fg(theme::TEXT)));
+                            spans.push(Span::styled(
+                                format!("{}{}", indent, icon),
+                                Style::default().fg(theme::SURFACE),
+                            ));
+                            spans.push(Span::styled(
+                                name.to_string(),
+                                Style::default().fg(theme::TEXT),
+                            ));
                             ListItem::new(Line::from(spans))
                         }
                     })
                     .collect();
 
                 let title_spans = vec![
-                    Span::styled(format!(" {} ", title), Style::default().fg(theme::LAVENDER).add_modifier(ratatui::style::Modifier::BOLD)),
+                    Span::styled(
+                        format!(" {} ", title),
+                        Style::default()
+                            .fg(theme::LAVENDER)
+                            .add_modifier(ratatui::style::Modifier::BOLD),
+                    ),
                     Span::styled("— ", Style::default().fg(theme::SURFACE)),
-                    Span::styled(format!("{} ", title_path), Style::default().fg(theme::OVERLAY)),
+                    Span::styled(
+                        format!("{} ", title_path),
+                        Style::default().fg(theme::OVERLAY),
+                    ),
                 ];
                 let header = Line::from(title_spans);
 
@@ -367,7 +494,9 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 for (i, &bit) in bits.iter().enumerate() {
                     let is_active = active_tags & bit != 0;
                     let style = if is_active {
-                        Style::default().fg(FLAG_COLORS[i]).add_modifier(ratatui::style::Modifier::BOLD)
+                        Style::default()
+                            .fg(FLAG_COLORS[i])
+                            .add_modifier(ratatui::style::Modifier::BOLD)
                     } else {
                         Style::default().fg(dim_color(FLAG_COLORS[i]))
                     };
@@ -375,13 +504,31 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 }
                 filter_spans.push(Span::raw("  "));
                 if search_mode {
-                    let (before, after) = search_buffer.split_at(cursor_pos.min(search_buffer.len()));
-                    let cursor_char = after.chars().next().map(|c| c.to_string()).unwrap_or_else(|| " ".to_string());
-                    let rest = if after.len() > cursor_char.len() { &after[cursor_char.len()..] } else { "" };
+                    let (before, after) =
+                        search_buffer.split_at(cursor_pos.min(search_buffer.len()));
+                    let cursor_char = after
+                        .chars()
+                        .next()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| " ".to_string());
+                    let rest = if after.len() > cursor_char.len() {
+                        &after[cursor_char.len()..]
+                    } else {
+                        ""
+                    };
                     filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
-                    filter_spans.push(Span::styled(before.to_string(), Style::default().fg(theme::TEXT)));
-                    filter_spans.push(Span::styled(cursor_char, Style::default().fg(theme::BASE).bg(theme::SAPPHIRE)));
-                    filter_spans.push(Span::styled(rest.to_string(), Style::default().fg(theme::TEXT)));
+                    filter_spans.push(Span::styled(
+                        before.to_string(),
+                        Style::default().fg(theme::TEXT),
+                    ));
+                    filter_spans.push(Span::styled(
+                        cursor_char,
+                        Style::default().fg(theme::BASE).bg(theme::SAPPHIRE),
+                    ));
+                    filter_spans.push(Span::styled(
+                        rest.to_string(),
+                        Style::default().fg(theme::TEXT),
+                    ));
                     if search_buffer.is_empty() {
                         filter_spans.push(Span::styled(
                             "  text + #tag or click a dot",
@@ -391,7 +538,9 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 } else if !search_buffer.is_empty() {
                     filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
                     for word in search_buffer.split(' ') {
-                        if word.is_empty() { continue; }
+                        if word.is_empty() {
+                            continue;
+                        }
                         let mut tag_color: Option<Color> = None;
                         if let Some(name) = word.strip_prefix('#') {
                             for (idx, &(_, tag_name, _, _)) in FLAG_DEFS.iter().enumerate() {
@@ -402,12 +551,17 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             }
                         }
                         let style = match tag_color {
-                            Some(c) => Style::default().fg(c).add_modifier(ratatui::style::Modifier::BOLD),
+                            Some(c) => Style::default()
+                                .fg(c)
+                                .add_modifier(ratatui::style::Modifier::BOLD),
                             None => Style::default().fg(theme::YELLOW),
                         };
                         filter_spans.push(Span::styled(format!("{} ", word), style));
                     }
-                    filter_spans.push(Span::styled(" esc to clear ", Style::default().fg(theme::OVERLAY)));
+                    filter_spans.push(Span::styled(
+                        " esc to clear ",
+                        Style::default().fg(theme::OVERLAY),
+                    ));
                 } else {
                     filter_spans.push(Span::styled("/", Style::default().fg(theme::YELLOW)));
                     filter_spans.push(Span::styled("filter", Style::default().fg(theme::OVERLAY)));
@@ -457,37 +611,63 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 }
 
                 // Preview pane
-                let preview_lines: Vec<Line> = if real_idx < nodes.len() && !nodes[real_idx].is_dir {
+                let preview_lines: Vec<Line> = if real_idx < nodes.len() && !nodes[real_idx].is_dir
+                {
                     match fs::read_to_string(&nodes[real_idx].path) {
-                        Ok(content) => {
-                            content.lines()
-                                .map(|line| {
-                                    let trimmed = line.to_string();
-                                    if trimmed.starts_with('#') {
-                                        Line::from(Span::styled(trimmed, Style::default().fg(theme::MAUVE).add_modifier(ratatui::style::Modifier::BOLD)))
-                                    } else if trimmed.starts_with("- [") {
-                                        Line::from(Span::styled(trimmed, Style::default().fg(theme::SAPPHIRE)))
-                                    } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-                                        Line::from(Span::styled(trimmed, Style::default().fg(theme::TEXT)))
-                                    } else {
-                                        Line::from(Span::styled(trimmed, Style::default().fg(theme::SUBTEXT)))
-                                    }
-                                })
-                                .collect()
-                        }
-                        Err(_) => vec![Line::from(Span::styled("  unable to read file", Style::default().fg(theme::OVERLAY)))],
+                        Ok(content) => content
+                            .lines()
+                            .map(|line| {
+                                let trimmed = line.to_string();
+                                if trimmed.starts_with('#') {
+                                    Line::from(Span::styled(
+                                        trimmed,
+                                        Style::default()
+                                            .fg(theme::MAUVE)
+                                            .add_modifier(ratatui::style::Modifier::BOLD),
+                                    ))
+                                } else if trimmed.starts_with("- [") {
+                                    Line::from(Span::styled(
+                                        trimmed,
+                                        Style::default().fg(theme::SAPPHIRE),
+                                    ))
+                                } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+                                    Line::from(Span::styled(
+                                        trimmed,
+                                        Style::default().fg(theme::TEXT),
+                                    ))
+                                } else {
+                                    Line::from(Span::styled(
+                                        trimmed,
+                                        Style::default().fg(theme::SUBTEXT),
+                                    ))
+                                }
+                            })
+                            .collect(),
+                        Err(_) => vec![Line::from(Span::styled(
+                            "  unable to read file",
+                            Style::default().fg(theme::OVERLAY),
+                        ))],
                     }
                 } else if real_idx < nodes.len() && nodes[real_idx].is_dir {
                     match fs::read_dir(&nodes[real_idx].path) {
                         Ok(entries) => {
-                            let mut names: Vec<String> = entries.flatten()
+                            let mut names: Vec<String> = entries
+                                .flatten()
                                 .map(|e| e.file_name().to_string_lossy().to_string())
                                 .collect();
                             names.sort();
-                            names.iter()
+                            names
+                                .iter()
                                 .map(|n| {
-                                    let color = if n.ends_with(".md") { theme::TEXT } else { theme::SAPPHIRE };
-                                    Line::from(Span::styled(format!("  {}", n), Style::default().fg(color)))
+                                    let color = if n.ends_with(".md") {
+                                        theme::TEXT
+                                    } else {
+                                        theme::SAPPHIRE
+                                    };
+                                    Line::from(Span::styled(
+                                        format!("  {}", n),
+                                        Style::default().fg(color),
+                                    ))
                                 })
                                 .collect()
                         }
@@ -500,7 +680,9 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 let total_lines = preview_lines.len() as u16;
                 let preview_height = cols[1].height.saturating_sub(2);
                 let max_scroll = total_lines.saturating_sub(preview_height);
-                if preview_scroll > max_scroll { preview_scroll = max_scroll; }
+                if preview_scroll > max_scroll {
+                    preview_scroll = max_scroll;
+                }
 
                 // Preview title with tags
                 let mut preview_title_spans = vec![];
@@ -510,14 +692,22 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                     preview_title_spans.extend(flags_slots(0));
                 }
                 preview_title_spans.push(Span::styled(
-                    if real_idx < nodes.len() { format!("{} ", nodes[real_idx].name) } else { String::new() },
+                    if real_idx < nodes.len() {
+                        format!("{} ", nodes[real_idx].name)
+                    } else {
+                        String::new()
+                    },
                     Style::default().fg(theme::OVERLAY),
                 ));
 
                 let real_path_display = if real_idx < nodes.len() {
-                    let resolved = fs::canonicalize(&nodes[real_idx].path).unwrap_or(nodes[real_idx].path.clone());
+                    let resolved = fs::canonicalize(&nodes[real_idx].path)
+                        .unwrap_or(nodes[real_idx].path.clone());
                     let home = dirs::home_dir().unwrap().to_string_lossy().to_string();
-                    let s = resolved.to_string_lossy().to_string().replacen(&home, "~", 1);
+                    let s = resolved
+                        .to_string_lossy()
+                        .to_string()
+                        .replacen(&home, "~", 1);
                     format!(" {} ", s)
                 } else {
                     String::new()
@@ -525,7 +715,10 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
 
                 let preview_block = Block::default()
                     .title(Line::from(preview_title_spans))
-                    .title_bottom(Line::from(Span::styled(real_path_display, Style::default().fg(theme::OVERLAY))))
+                    .title_bottom(Line::from(Span::styled(
+                        real_path_display,
+                        Style::default().fg(theme::OVERLAY),
+                    )))
                     .borders(Borders::ALL)
                     .border_style(theme::border())
                     .border_type(ratatui::widgets::BorderType::Rounded)
@@ -540,21 +733,31 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
 
                 // Status bar
                 let status = if vim.active {
-                    Line::from(vec![
-                        Span::styled(vim.buffer.as_str(), Style::default().fg(theme::MAUVE)),
-                    ])
+                    Line::from(vec![Span::styled(
+                        vim.buffer.as_str(),
+                        Style::default().fg(theme::MAUVE),
+                    )])
                 } else if flag_mode {
-                    let cur_flags = if real_idx < nodes.len() { nodes[real_idx].flags } else { 0 };
-                    let mut spans = vec![
-                        Span::styled(" tags: ", Style::default().fg(theme::MAUVE)),
-                    ];
+                    let cur_flags = if real_idx < nodes.len() {
+                        nodes[real_idx].flags
+                    } else {
+                        0
+                    };
+                    let mut spans =
+                        vec![Span::styled(" tags: ", Style::default().fg(theme::MAUVE))];
                     for (idx, &(bit, _, _, label)) in FLAG_DEFS.iter().enumerate() {
                         let active = cur_flags & bit != 0;
                         let color = FLAG_COLORS[idx];
                         // Number: tag color. Colon: gray. Label: tag color when active, gray otherwise.
-                        spans.push(Span::styled(format!("{}", idx + 1), Style::default().fg(color)));
+                        spans.push(Span::styled(
+                            format!("{}", idx + 1),
+                            Style::default().fg(color),
+                        ));
                         spans.push(Span::styled(":", Style::default().fg(theme::OVERLAY)));
-                        spans.push(Span::styled(format!("{} ", label), Style::default().fg(if active { color } else { theme::OVERLAY })));
+                        spans.push(Span::styled(
+                            format!("{} ", label),
+                            Style::default().fg(if active { color } else { theme::OVERLAY }),
+                        ));
                         spans.push(Span::styled(" ", Style::default()));
                     }
                     Line::from(spans)
@@ -584,19 +787,81 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 // Help overlay
                 if show_help {
                     let help_text = vec![
-                        Line::from(Span::styled("  keybindings", Style::default().fg(theme::MAUVE).add_modifier(ratatui::style::Modifier::BOLD))),
+                        Line::from(Span::styled(
+                            "  keybindings",
+                            Style::default()
+                                .fg(theme::MAUVE)
+                                .add_modifier(ratatui::style::Modifier::BOLD),
+                        )),
                         Line::from(""),
-                        Line::from(vec![Span::styled("  o", Style::default().fg(theme::GREEN)), Span::styled(" / enter          open file / toggle dir", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  l", Style::default().fg(theme::MAUVE)), Span::styled("                  expand directory", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  h", Style::default().fg(theme::MAUVE)), Span::styled("                  collapse / go to parent", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  f", Style::default().fg(theme::GREEN)), Span::styled("                  focus directory", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  /", Style::default().fg(theme::YELLOW)), Span::styled("                  filter — fuzzy text + #tagname, or click a dot", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  t", Style::default().fg(theme::PEACH)), Span::styled("                  tag mode (1-5 toggle, t again to close)", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  v", Style::default().fg(theme::SAPPHIRE)), Span::styled("                  view all / collapse all", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  j/k", Style::default().fg(theme::TEXT)), Span::styled("                navigate", Style::default().fg(theme::TEXT))]),
-                        Line::from(vec![Span::styled("  q", Style::default().fg(theme::PEACH)), Span::styled("                  quit", Style::default().fg(theme::TEXT))]),
+                        Line::from(vec![
+                            Span::styled("  o", Style::default().fg(theme::GREEN)),
+                            Span::styled(
+                                " / enter          open file / toggle dir",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  l", Style::default().fg(theme::MAUVE)),
+                            Span::styled(
+                                "                  expand directory",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  h", Style::default().fg(theme::MAUVE)),
+                            Span::styled(
+                                "                  collapse / go to parent",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  f", Style::default().fg(theme::GREEN)),
+                            Span::styled(
+                                "                  focus directory",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  /", Style::default().fg(theme::YELLOW)),
+                            Span::styled(
+                                "                  filter — fuzzy text + #tagname, or click a dot",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  t", Style::default().fg(theme::PEACH)),
+                            Span::styled(
+                                "                  tag mode (1-5 toggle, t again to close)",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  v", Style::default().fg(theme::SAPPHIRE)),
+                            Span::styled(
+                                "                  view all / collapse all",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  j/k", Style::default().fg(theme::TEXT)),
+                            Span::styled(
+                                "                navigate",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
+                        Line::from(vec![
+                            Span::styled("  q", Style::default().fg(theme::PEACH)),
+                            Span::styled(
+                                "                  quit",
+                                Style::default().fg(theme::TEXT),
+                            ),
+                        ]),
                         Line::from(""),
-                        Line::from(Span::styled("  press any key to close", Style::default().fg(theme::OVERLAY))),
+                        Line::from(Span::styled(
+                            "  press any key to close",
+                            Style::default().fg(theme::OVERLAY),
+                        )),
                     ];
                     let help_h = help_text.len() as u16 + 2;
                     let help_w = 44_u16;
@@ -653,7 +918,9 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             }
                             // Tag dot click on a file → toggle that tag.
                             if !nodes[real].is_dir {
-                                if let Some(d) = mouse_x_to_filter_dot(mouse.column, list_inner_area.x) {
+                                if let Some(d) =
+                                    mouse_x_to_filter_dot(mouse.column, list_inner_area.x)
+                                {
                                     nodes[real].flags ^= FLAG_DEFS[d as usize].0;
                                     continue;
                                 }
@@ -673,7 +940,11 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
 
         if let Event::Key(key) = ev {
             // Ctrl+C always exits
-            if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+            if key.code == KeyCode::Char('c')
+                && key
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::CONTROL)
+            {
                 break;
             }
 
@@ -687,8 +958,11 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
             if flag_mode {
                 let mut consumed = true;
                 match key.code {
-                    KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Char('3') |
-                    KeyCode::Char('4') | KeyCode::Char('5') => {
+                    KeyCode::Char('1')
+                    | KeyCode::Char('2')
+                    | KeyCode::Char('3')
+                    | KeyCode::Char('4')
+                    | KeyCode::Char('5') => {
                         let idx = match key.code {
                             KeyCode::Char(c) => (c as u8 - b'1') as usize,
                             _ => unreachable!(),
@@ -711,15 +985,21 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                         flag_mode = false;
                         consumed = false;
                     }
-                    KeyCode::Char('j') | KeyCode::Down |
-                    KeyCode::Char('k') | KeyCode::Up |
-                    KeyCode::Char('h') | KeyCode::Left |
-                    KeyCode::Char('l') | KeyCode::Right => {
+                    KeyCode::Char('j')
+                    | KeyCode::Down
+                    | KeyCode::Char('k')
+                    | KeyCode::Up
+                    | KeyCode::Char('h')
+                    | KeyCode::Left
+                    | KeyCode::Char('l')
+                    | KeyCode::Right => {
                         consumed = false;
                     }
                     _ => {}
                 }
-                if consumed { continue; }
+                if consumed {
+                    continue;
+                }
             }
 
             // Search mode
@@ -732,8 +1012,12 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             search_buffer.clear();
                         }
                     }
-                    KeyCode::Left => { cursor_pos = prev_char_boundary(&search_buffer, cursor_pos); }
-                    KeyCode::Right => { cursor_pos = next_char_boundary(&search_buffer, cursor_pos); }
+                    KeyCode::Left => {
+                        cursor_pos = prev_char_boundary(&search_buffer, cursor_pos);
+                    }
+                    KeyCode::Right => {
+                        cursor_pos = next_char_boundary(&search_buffer, cursor_pos);
+                    }
                     KeyCode::Backspace => {
                         if cursor_pos > 0 {
                             let prev = prev_char_boundary(&search_buffer, cursor_pos);
@@ -744,7 +1028,10 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             search_mode = false;
                         }
                     }
-                    KeyCode::Char(c) => { search_buffer.insert(cursor_pos, c); cursor_pos += c.len_utf8(); }
+                    KeyCode::Char(c) => {
+                        search_buffer.insert(cursor_pos, c);
+                        cursor_pos += c.len_utf8();
+                    }
                     _ => {}
                 }
                 state.select(Some(0));
@@ -782,8 +1069,12 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             let old_top = find_top_dir(&nodes, real_idx);
                             let new_top = find_top_dir(&nodes, target);
                             if old_top != new_top {
-                                if let Some(ot) = old_top { nodes[ot].expanded = false; }
-                                if let Some(nt) = new_top { nodes[nt].expanded = true; }
+                                if let Some(ot) = old_top {
+                                    nodes[ot].expanded = false;
+                                }
+                                if let Some(nt) = new_top {
+                                    nodes[nt].expanded = true;
+                                }
                                 let new_vis = get_visible_nodes(&nodes);
                                 if let Some(pos) = new_vis.iter().position(|&i| i == target) {
                                     state.select(Some(pos));
@@ -803,8 +1094,12 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                             let old_top = find_top_dir(&nodes, real_idx);
                             let new_top = find_top_dir(&nodes, target);
                             if old_top != new_top {
-                                if let Some(ot) = old_top { nodes[ot].expanded = false; }
-                                if let Some(nt) = new_top { nodes[nt].expanded = true; }
+                                if let Some(ot) = old_top {
+                                    nodes[ot].expanded = false;
+                                }
+                                if let Some(nt) = new_top {
+                                    nodes[nt].expanded = true;
+                                }
                                 let new_vis = get_visible_nodes(&nodes);
                                 if let Some(pos) = new_vis.iter().position(|&i| i == target) {
                                     state.select(Some(pos));
@@ -868,14 +1163,18 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                                 }
                             }
                             let new_vis = get_visible_nodes(&nodes);
-                            if let Some(pos) = new_vis.iter().position(|&i| i == current_top.unwrap_or(0)) {
+                            if let Some(pos) =
+                                new_vis.iter().position(|&i| i == current_top.unwrap_or(0))
+                            {
                                 *state.offset_mut() = 0;
                                 state.select(Some(pos));
                             }
                             focus_active = false;
                         } else {
                             // Save state
-                            pre_focus_expanded = nodes.iter().enumerate()
+                            pre_focus_expanded = nodes
+                                .iter()
+                                .enumerate()
                                 .filter(|(_, n)| n.is_dir && n.depth == 0)
                                 .map(|(i, n)| (i, n.expanded))
                                 .collect();
@@ -894,7 +1193,9 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
                 KeyCode::Char('v') => {
                     // Toggle view all / collapse all
                     let current_top = find_top_dir(&nodes, real_idx).unwrap_or(0);
-                    let any_collapsed = nodes.iter().any(|n| n.is_dir && n.depth == 0 && !n.expanded);
+                    let any_collapsed = nodes
+                        .iter()
+                        .any(|n| n.is_dir && n.depth == 0 && !n.expanded);
                     for node in nodes.iter_mut() {
                         if node.is_dir && node.depth == 0 {
                             node.expanded = any_collapsed;
@@ -951,8 +1252,16 @@ fn run_tree_tui(mut nodes: Vec<TreeNode>, editor: &str, title: &str, title_path:
             top.parent().unwrap_or(root).to_path_buf()
         };
         if node.flags != 0 {
-            let rel = node.path.strip_prefix(&node_root).unwrap_or(&node.path).to_string_lossy().to_string();
-            roots_tags.entry(node_root).or_default().insert(rel, node.flags);
+            let rel = node
+                .path
+                .strip_prefix(&node_root)
+                .unwrap_or(&node.path)
+                .to_string_lossy()
+                .to_string();
+            roots_tags
+                .entry(node_root)
+                .or_default()
+                .insert(rel, node.flags);
         }
     }
     for (r, tags) in &roots_tags {
@@ -973,7 +1282,9 @@ fn build_children(dir: &Path, depth: usize, parent_idx: Option<usize>, nodes: &m
     let mut dirs_other = Vec::new();
     let mut files = Vec::new();
 
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
@@ -1040,7 +1351,9 @@ fn build_children(dir: &Path, depth: usize, parent_idx: Option<usize>, nodes: &m
 fn derive_dir_flags(nodes: &mut Vec<TreeNode>) {
     let len = nodes.len();
     for i in (0..len).rev() {
-        if !nodes[i].is_dir { continue; }
+        if !nodes[i].is_dir {
+            continue;
+        }
         let mut agg: u8 = 0;
         for j in (i + 1)..len {
             if nodes[j].parent_idx == Some(i) {
@@ -1077,10 +1390,14 @@ fn compute_node_filter_keep(nodes: &[TreeNode], text_query: &str, tag_sets: &[u8
         }
     }
     for i in 0..n {
-        if !keep[i] { continue; }
+        if !keep[i] {
+            continue;
+        }
         let mut cur = nodes[i].parent_idx;
         while let Some(p) = cur {
-            if keep[p] { break; }
+            if keep[p] {
+                break;
+            }
             keep[p] = true;
             cur = nodes[p].parent_idx;
         }
