@@ -1,5 +1,12 @@
 # notez
 
+> **Deprecated.** Superseded by [notez2](https://github.com/Gaurgle/notez2): a
+> cross-machine portable rewrite (no OS symlinks, no numbered dirs, scoped
+> storage) with the same CLI surface, plus **epoz**, a desktop app over the
+> same files. Migrate with `notez migrate-from-legacy` from notez2. This repo
+> is kept for history; the todoz/tree TUIs remain here until their notez2
+> ports land.
+
 ![License](https://img.shields.io/github/license/Gaurgle/notez-cli)
 ![Open Source](https://img.shields.io/badge/open%20source-%E2%9D%A4-c4a7e7)
 ![Rust](https://img.shields.io/badge/rust-stable-dea584)
